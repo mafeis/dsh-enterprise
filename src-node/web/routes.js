@@ -21,16 +21,16 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeTextAtomic, readJsonSafe } from '../shared/fs-utils.js'
-import { dshSettingsFile, entSettingsFile, credentialsFile } from '../shared/paths.js'
+import { entSettingsFile } from '../shared/paths.js'
 import { pluginLog } from '../shared/log.js'
 import { readState, saveState, readToken } from '../state/state.js'
-import { removeProviderFromSettingsYaml } from '../settings/yaml-edit.js'
 import { collectInstalledPlugins } from '../device/device-info.js'
 import { fetchPolicySnapshot, resolvePluginInstallSpec, runPluginCli, findProfileRoot, MARKET_DESC_ZH, marketMeta, peekCachedPolicy } from '../policy/policy.js'
 import { PROTECTED_PLUGINS, isEnforceBusy, claimManifestOp, releaseManifestOp } from '../enforce/plugin-enforce.js'
 import { RULE_ENGINE_VERSION, runTextRules, runUrlRules, noteRuleRun, getRuleRuns, getRuleHits, isStepHookAlive, ruleHost } from '../rules/engine.js'
 import { currentHeartbeatState, runHeartbeatOnce, syncHeartbeatTimer } from '../heartbeat/heartbeat.js'
 import { repairConfigure, loginAndConfigure } from '../auth/login.js'
+import { logoutLocal } from '../auth/logout.js'
 import { LOGIN_PAGE_HTML } from './login-page.js'
 
 export function createRoutes(ctx) {
@@ -419,43 +419,8 @@ export function createRoutes(ctx) {
               })
             } catch { /* 网关不可达也要继续清理本地 */ }
           }
-          // 2. 清本地配置与凭证
-          const settingsPath = entSettingsFile()
-          const s = readJsonSafe(settingsPath)
-          if (s) { delete s.providers?.['ent-gateway']; delete s['agent-default-model']; writeTextAtomic(settingsPath, JSON.stringify(s, null, 2)) }
-          // 主 settings.yaml：移除 ent-gateway；企业管控模式下进一步把模型配置整个清空（providers: {} + 删默认模型）——
-          // 不登录不能用：登出后 DSH 无任何可用模型，登录遮罩挡住全部操作
-          const mainSettings = dshSettingsFile()
-          if (existsSync(mainSettings)) {
-            const raw = readFileSync(mainSettings, 'utf8')
-            let cleaned = removeProviderFromSettingsYaml(raw, 'ent-gateway')
-            // 顶层 agent-default-model 若指向 ent-gateway，一并移除（否则 DSH 找不到 provider 启动报错）
-            if (/^agent-default-model:\s*\n(\s+provider:\s*ent-gateway[^\n]*\n)/m.test(cleaned)) {
-              cleaned = cleaned.replace(/^(agent-default-model:\s*)\n\s+provider:\s*ent-gateway[^\n]*\n\s+model:[^\n]*\n/m, '')
-            }
-            // 企业管控：清空所有模型（用户要求登出后模型配置清空）
-            const admMatch = cleaned.match(/^agent-default-model:\s*\n\s+provider:\s*([^\n]+)\n/m)
-            const admProvider = admMatch?.[1]?.trim()
-            if (!admProvider || admProvider === 'ent-gateway') {
-              // 无其他默认模型（或默认就是企业网关）→ 连 agent-default-model 一起删
-              cleaned = cleaned.replace(/^agent-default-model:\s*\n(\s+.*\n?)+/m, '')
-            }
-            cleaned = cleaned.replace(/(^llm-pi-ai:\s*\n)\s+providers:[^\n]*\n(?:(?!  [a-zA-Z]|\n)[^\n]*\n)*/m, '$1  providers: {}\n')
-            // 确保 llm-deepseek 屏蔽段存在：DSH 内置官方 deepseek provider 自带一整套 v4 模型目录，
-            // 不屏蔽会在会话模型下拉里冒出来，绕过企业网关统一管控
-            if (!/^llm-deepseek:\s*$/m.test(cleaned)) {
-              cleaned = cleaned.replace(/(^llm-pi-ai:\s*\n\s+providers: \{\}\n)/m, '$1llm-deepseek:\n  models: []\n')
-            }
-            if (cleaned !== raw) writeTextAtomic(mainSettings, cleaned)
-          }
-          const credPath = credentialsFile()
-          if (existsSync(credPath)) {
-            const raw = readFileSync(credPath, 'utf8').replace(/^\s*ENT_GATEWAY_TOKEN:\s*.*\r?\n?/m, '')
-            writeTextAtomic(credPath, raw)
-          }
-          // 3. 清 state 里的令牌与登录痕迹
-          saveState({ token: null, tokenPreview: null, user: null, loginAt: null })
-          pluginLog(`登出完成（原账号=${st.user ?? '未知'}，网关地址保留=${st.gateway ?? ''}）`)
+          // 2. 清本地配置与凭证（与心跳 401 自动清场共用同一实现，见 auth/logout.js）
+          logoutLocal('用户登出')
           json(200, { ok: true })
         } catch (e) { json(500, { ok: false, error: String(e).slice(0, 120) }) }
       },

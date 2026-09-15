@@ -1,7 +1,7 @@
-/** 心跳热生效回归：网关地址每拍重读（换网关无需重启实例） */
+/** 心跳热生效回归：网关地址每拍重读（换网关无需重启实例）+ 401 连续 2 次自动清场 */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -10,6 +10,7 @@ process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'dsh-hb-test-'))
 mkdirSync(join(process.env.DSH_HOME, 'enterprise'), { recursive: true })
 
 const { runHeartbeatOnce } = await import('../src-node/heartbeat/heartbeat.js')
+const { readState } = await import('../src-node/state/state.js')
 
 const stateFile = join(process.env.DSH_HOME, 'enterprise', 'enterprise-state.json')
 const writeState = (gateway) =>
@@ -43,4 +44,57 @@ test('heartbeat 未登录（无 gateway）时静默跳过，不发起请求不�
   } finally {
     globalThis.fetch = origFetch
   }
+})
+
+/** 401 清场用例的登录态夹具：provider 配置 + 凭证 + 登录态齐全 */
+function setupLoggedIn() {
+  const home = process.env.DSH_HOME
+  writeFileSync(stateFile, JSON.stringify({ gateway: 'http://gw', user: 'u', tokenPreview: 'tok', heartbeatConfig: { enabled: true, intervalSec: 15 } }))
+  writeFileSync(join(home, 'enterprise', 'enterprise-settings.yaml'), JSON.stringify({ providers: { 'ent-gateway': { models: [] } }, 'agent-default-model': { provider: 'ent-gateway' } }))
+  writeFileSync(join(home, '.credentials.yaml'), 'version: 1\nrefs:\n  ENT_GATEWAY_TOKEN: tok\n')
+  writeFileSync(join(home, 'settings.yaml'), 'llm-pi-ai:\n  providers:\n    ent-gateway:\n      baseUrl: http://gw\n')
+}
+
+test('heartbeat 连续 2 次 401：自动清场（provider/凭证/登录态清空，网关地址保留）', async () => {
+  setupLoggedIn()
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response('{"error":"disabled"}', { status: 401 })
+  try {
+    await runHeartbeatOnce()
+    // 第一次 401：不清场
+    assert.equal(readState().user, 'u')
+    await runHeartbeatOnce()
+  } finally {
+    globalThis.fetch = origFetch
+  }
+  const st = readState()
+  assert.equal(st.user, null, '登录态应清空')
+  assert.equal(st.gateway, 'http://gw', '网关地址应保留（登录页预填）')
+  const ent = JSON.parse(readFileSync(join(process.env.DSH_HOME, 'enterprise', 'enterprise-settings.yaml'), 'utf8'))
+  assert.equal(ent.providers?.['ent-gateway'], undefined, 'ent-gateway provider 应移除')
+  const cred = readFileSync(join(process.env.DSH_HOME, '.credentials.yaml'), 'utf8')
+  assert.ok(!/ENT_GATEWAY_TOKEN/.test(cred), '凭证应移除')
+  // 第三拍：登录态已清，应静默跳过——不再发请求，也不会重复清场
+  let extraHits = 0
+  globalThis.fetch = async () => { extraHits++; return new Response('{}', { status: 401 }) }
+  try { await runHeartbeatOnce() } finally { globalThis.fetch = origFetch }
+  assert.equal(extraHits, 0, '清场后心跳应跳过，不再打 401')
+})
+
+test('heartbeat 单次 401 或网络错误：不清场（防抖动误伤）', async () => {
+  setupLoggedIn()
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response('{}', { status: 401 })
+  try { await runHeartbeatOnce() } finally { globalThis.fetch = origFetch }
+  assert.equal(readState().user, 'u', '单次 401 不应清场')
+  // 网络错误（fetch reject）也不清场
+  globalThis.fetch = async () => { throw new Error('ECONNREFUSED') }
+  try { await runHeartbeatOnce() } finally { globalThis.fetch = origFetch }
+  assert.equal(readState().user, 'u', '网络错误不应清场')
+  // 恢复 200：401 计数归零，再单独一次 401 仍不清场
+  globalThis.fetch = async () => new Response('{}', { status: 200 })
+  try { await runHeartbeatOnce() } finally { globalThis.fetch = origFetch }
+  globalThis.fetch = async () => new Response('{}', { status: 401 })
+  try { await runHeartbeatOnce() } finally { globalThis.fetch = origFetch }
+  assert.equal(readState().user, 'u', '成功拍后计数归零，单次 401 不应清场')
 })

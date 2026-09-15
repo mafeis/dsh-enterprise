@@ -11,6 +11,7 @@ import { saveState, readState } from '../state/state.js'
 import { collectDeviceInfo } from '../device/device-info.js'
 import { pluginLog, ctxLoggerInfoSafe } from '../shared/log.js'
 import { repairConfigure } from '../auth/login.js'
+import { logoutLocal } from '../auth/logout.js'
 import { enforcePluginAllowlist, PROTECTED_PLUGINS, retryPendingPluginEntities } from '../enforce/plugin-enforce.js'
 import { statePath } from '../shared/paths.js'
 import { watch } from 'node:fs'
@@ -20,6 +21,8 @@ let heartbeatTimer = null
 let heartbeatState = { lastOk: false, lastAt: '', lastLatencyMs: -1, lastError: '' }
 let lastModelFingerprint = null
 let hbFailStreak = 0
+/** 连续 401 计数（凭证被网关拒绝：停用账号/吊销令牌）——连续 2 次自动清场回登录页 */
+let hb401Streak = 0
 
 /** 当前生效的心跳配置指纹（JSON 字符串）：与状态文件不一致即热重载定时器 */
 const HB_DEFAULT = { enabled: true, intervalSec: 60 }
@@ -157,8 +160,9 @@ export async function runHeartbeatOnce() {
   try {
     const st = readState()
     const base = st.gateway
-    if (!base) {
-      // 未登录/已登出：不报错不重试，等下次登录（syncHeartbeatTimer 会因 gateway 缺失不起表）
+    if (!base || !st.user) {
+      // 未登录/已登出/被自动清场：不报错不重试，等下次登录（syncHeartbeatTimer 会因 gateway 缺失不起表；
+      // 自动清场后 gateway 保留、user 已清——这里必须拦住，否则空 token 继续打 401 触发重复清场）
       heartbeatState = { lastOk: false, lastAt: new Date().toISOString(), lastLatencyMs: -1, lastError: '' }
       return heartbeatState
     }
@@ -180,6 +184,7 @@ export async function runHeartbeatOnce() {
       signal: AbortSignal.timeout(6000),
     })
     if (res.ok) {
+      hb401Streak = 0
       const rb = await res.json().catch(() => ({}))
       if (rb.deviceAccepted === false) {
         // 网关没有该设备的快照（首次/库被清），下次强制全量
@@ -221,7 +226,23 @@ export async function runHeartbeatOnce() {
           }).catch(() => {})
         }
       }
+    } else if (res.status === 401) {
+      // 凭证被网关明确拒绝（账号停用/令牌吊销/改密）。网络错误不会走到这里（走 catch），
+      // 网关其他 5xx 也不算。连续 2 次（防单拍异常抖动）自动本地清场 →
+      // 客户端状态轮询发现 configured=false 即弹出全屏登录遮罩，账号被停用的终端最迟约 1 分钟回登录页
+      hb401Streak++
+      heartbeatState = { lastOk: false, lastAt: new Date().toISOString(), lastLatencyMs: Date.now() - started, lastError: `HTTP 401` }
+      if (hb401Streak >= 2) {
+        hb401Streak = 0
+        try {
+          logoutLocal('心跳 401：账号已被网关停用或凭证被吊销')
+          pluginLog('[enterprise] 心跳连续 401 ×2，已自动清场——请在登录页重新登录（若账号被停用请联系管理员）')
+        } catch (e) {
+          pluginLog(`[enterprise] 心跳 401 自动清场失败: ${String(e?.stack ?? e).slice(0, 400)}`)
+        }
+      }
     } else {
+      hb401Streak = 0
       heartbeatState = { lastOk: false, lastAt: new Date().toISOString(), lastLatencyMs: Date.now() - started, lastError: `HTTP ${res.status}` }
     }
   } catch (e) {
