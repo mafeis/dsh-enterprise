@@ -65,7 +65,7 @@
 					if (b.ok) {
 						// 配置经 settings watch 热生效，无需重启；若 Desktop 首启向导还挂着
 						//（旧安装未预写 skipped 标记），提示员工直接关掉即可，模型已可用。
-						$("enterprise-ok").innerHTML = "✓ 企业模型配置完成，模型已就绪。若看到「配置 API key」向导，直接关掉即可（无需填写）";
+						$("enterprise-ok").innerHTML = "✓ 登录成功，模型已就绪";
 						btn.textContent = "已配置 ✓";
 						setTimeout(() => location.reload(), 2600);
 						return;
