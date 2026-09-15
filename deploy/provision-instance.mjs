@@ -14,7 +14,7 @@
  * 用法：node provision-instance.cjs <DSH_HOME> <userDataDir> [profileName=desktop]
  * 前置：桌面至少启动过一次（profile 骨架已生成）或先用启动脚本拉起再关闭。
  */
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, basename } from 'node:path'
 
@@ -27,12 +27,24 @@ if (!dshHomeArg || !userDataArg) {
 }
 const dshHome = dshHomeArg.replace(/[/\\]+$/, '')
 const profileDir = join(dshHome, 'profiles', profileName)
-if (!existsSync(profileDir)) {
-  console.error(`profile 不存在: ${profileDir}（先启动一次桌面生成骨架，关掉再跑本脚本）`)
-  process.exit(1)
-}
 
 let done = []
+
+// ---------- 0. profile 骨架（冷启动：不再需要先跑一次宿主生成骨架） ----------
+// 全部内容有现成模板（ent2 实例实证），直接写文件替代"骨架启动"那一次多余启动
+{
+  mkdirSync(profileDir, { recursive: true })
+  const cordisYml = join(profileDir, 'cordis.yml')
+  if (!existsSync(cordisYml)) {
+    writeFileSync(cordisYml, '[]\n')
+    done.push('profile 骨架 cordis.yml')
+  }
+  const wsYml = join(profileDir, 'pnpm-workspace.yaml')
+  if (!existsSync(wsYml)) {
+    writeFileSync(wsYml, 'allowBuilds:\n  node-pty: true\npackages:\n  - .\nnodeLinker: hoisted\nautoInstallPeers: false\n')
+    done.push('profile 骨架 pnpm-workspace.yaml')
+  }
+}
 
 // ---------- 1. 桌面向导回执 + 桌面模式首选项（真正的持久层） ----------
 {
@@ -79,18 +91,31 @@ let done = []
   }
 }
 
-// ---------- 2. 默认工作区 ----------
+// ---------- 2. 默认工作区（workspace.json 不存在时从零建 v2 结构，不再依赖宿主先初始化 storages） ----------
 {
   const file = join(dshHome, 'storages', 'workspace.json')
-  if (existsSync(file)) {
+  const candidates = process.platform === 'win32'
+    ? ['D:\\dsh-workspace', 'C:\\dsh-workspace']
+    : [join(process.env.HOME ?? process.env.USERPROFILE ?? '', 'dsh-workspace')]
+  const dir = candidates.find((d) => existsSync(d))
+  if (!existsSync(file)) {
+    if (!dir) { done.push('默认工作区（候选目录不存在，登录后插件会注册）') }
+    else {
+      const id = randomUUID()
+      const now = new Date().toISOString()
+      mkdirSync(join(dshHome, 'storages'), { recursive: true })
+      writeFileSync(file, JSON.stringify({
+        unit: { name: 'workspace', version: 2 },
+        global: { initialized: true, workspaceIds: [id], archivedSessionIds: [] },
+        tables: { workspaces: { [id]: { path: dir, title: basename(dir), sessionIds: [], createdAt: now, updatedAt: now } } },
+      }, null, 2))
+      done.push(`默认工作区 ${dir}（workspace.json 新建）`)
+    }
+  } else {
     const j = JSON.parse(readFileSync(file, 'utf8'))
     if ((j?.global?.workspaceIds ?? []).length === 0) {
-      const candidates = process.platform === 'win32'
-        ? ['D:\\dsh-workspace', 'C:\\dsh-workspace']
-        : [join(process.env.HOME ?? process.env.USERPROFILE ?? '', 'dsh-workspace')]
-      const dir = candidates.find((d) => existsSync(d))
       if (dir) {
-        const id = crypto.randomUUID()
+        const id = randomUUID()
         j.global = j.global ?? {}
         j.global.initialized = true
         j.global.workspaceIds = [id]
@@ -104,7 +129,7 @@ let done = []
         done.push(`默认工作区 ${dir}`)
       } else done.push('默认工作区（候选目录不存在，跳过）')
     } else done.push('默认工作区（已有工作区，跳过）')
-  } else done.push('默认工作区（storages 未初始化，登录后插件会注册）')
+  }
 }
 
 // ---------- 3. settings 预签（ui-onboarding + dsh-desktop.mode） ----------

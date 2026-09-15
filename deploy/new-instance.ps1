@@ -1,23 +1,23 @@
 ﻿#!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-  企业版新实例一键交付：生成骨架 → 停 → 装插件 → 预置首启状态 → 正式启动。
+  企业版新实例一键交付（冷启动）：写骨架 → 装插件 → 预置首启状态 → 单次启动。
 .DESCRIPTION
   解决"宿主启动读状态早于插件激活写入"的时序问题：首启体验（向导回执/横幅回执/
-  默认工作区/增强模式）必须在正式启动之前落盘。本脚本串起完整流水线：
+  默认工作区/增强模式/默认网关）必须在正式启动之前落盘。冷启动流水线全程只有
+  最后一次启动（骨架文件由 provision 脚本直接写，不再需要先跑一次宿主生成）：
 
-    1. 骨架启动    拉起桌面生成 profile 骨架（首启，无插件）
-    2. 停实例      等骨架生成后关掉
-    3. 装插件      dsh-enterprise(构建产物) + hot-reload + startup-guard（标准装法）
-    4. 预置状态    provision-instance.mjs（向导回执 + 默认工作区 + settings 预签）
-    5. 正式启动    带插件的最终启动——第一屏即终态
+    1. 建骨架      home + 启动脚本 + profile 骨架文件（纯写文件，不启动）
+    2. 装插件      dsh-enterprise(构建产物) + hot-reload + startup-guard（标准装法）
+    3. 预置状态    provision-instance.mjs（向导回执+模式首选项+工作区+网关+settings）
+    4. 正式启动    带插件的唯一一次启动——第一屏即终态
 
 .PARAMETER Name        实例名（如 ent5）：home=C:\Users\<user>\.<Name>，userData=C:\Users\<user>\.dsh-desktop-<Name>
 .PARAMETER PluginSrc   dsh-enterprise-plugin 仓库路径（取 lib 构建产物）
 .PARAMETER HelperFrom  参照实例的 profiles\desktop（取 hot-reload / startup-guard 实体目录）
 .PARAMETER Gateway      出厂默认网关地址（登录页预填），默认 http://10.102.101.42:8890
 .EXAMPLE
-  .\new-instance.ps1 -Name ent5 -PluginSrc D:\mafei\企业版\dsh-enterprise-plugin -HelperFrom C:\Users\Administrator\.dsh-ent2\profiles\desktop
+  .\new-instance.ps1 -Name ent8 -PluginSrc D:\mafei\企业版\dsh-enterprise-plugin -HelperFrom C:\Users\Administrator\.dsh-ent2\profiles\desktop
 #>
 param(
   [Parameter(Mandatory)][string]$Name,
@@ -57,23 +57,10 @@ function Stop-Instance {
   Start-Sleep 2  # 退出写盘缓冲
 }
 
-Write-Host "== 1/5 骨架启动（生成 profile，无插件首启）==" -ForegroundColor Cyan
-if (-not (Test-Path "$profileDir\package.json")) {
-  Start-Process cmd -ArgumentList "/c", $cmd -WindowStyle Hidden
-  $deadline = (Get-Date).AddSeconds(60)
-  while ((Get-Date) -lt $deadline -and -not (Test-Path "$profileDir\package.json")) { Start-Sleep 2 }
-  Start-Sleep 5   # 等宿主把 profile-setup / storages 等首启目录写完
-  Stop-Instance
-  Start-Sleep 2   # 等宿主进程完全退出（退出途中可能清理 profile-setup）
-  Write-Host "   profile 骨架已生成"
-  # 骨架启动会弹"欢迎/开始设置"向导（无回执）——宿主退出时可能留下向导窗口进程，
-  # 双重确认全部清干净，否则残留进程会在预置后清掉回执（ent5 实测）
-  Stop-Instance
-} else { Write-Host "   profile 已存在，跳过" }
+Write-Host "== 1/4 骨架（纯写文件，不启动宿主）==" -ForegroundColor Cyan
+Write-Host "   profile 目录已备好"
 
-Write-Host "== 2/5 已停实例 ==" -ForegroundColor Cyan
-
-Write-Host "== 3/5 装插件（标准装法：无 BOM / file: 引用 / pnpm offline）==" -ForegroundColor Cyan
+Write-Host "== 2/4 装插件（标准装法：无 BOM / file: 引用 / pnpm offline）==" -ForegroundColor Cyan
 New-Item -ItemType Directory -Path "$profileDir\node_modules\dsh-enterprise" -Force | Out-Null
 robocopy "$PluginSrc\lib" "$profileDir\node_modules\dsh-enterprise\lib" /MIR /NJH /NJS /NDL | Out-Null
 Copy-Item "$PluginSrc\package.json","$PluginSrc\cordis.patch.yml" "$profileDir\node_modules\dsh-enterprise\" -Force
@@ -98,12 +85,12 @@ fs.writeFileSync(p + '/cordis.patch.yml', '# desktop profile: settings 指向本
 Push-Location $profileDir; pnpm install --offline 2>&1 | Select-Object -Last 1; Pop-Location
 Write-Host "   dsh-enterprise@$ver 已装"
 
-Write-Host "== 4/5 预置首启状态（向导回执/默认工作区/横幅+增强模式）==" -ForegroundColor Cyan
+Write-Host "== 3/4 预置首启状态（向导回执/模式首选项/默认工作区/网关预填/settings）==" -ForegroundColor Cyan
 $env:ENT_GATEWAY_PRESET = $Gateway
 node "$PluginSrc\deploy\provision-instance.mjs" $home4 $userData desktop
 Remove-Item Env:ENT_GATEWAY_PRESET -ErrorAction SilentlyContinue
 
-Write-Host "== 5/5 正式启动 ==" -ForegroundColor Cyan
+Write-Host "== 4/4 正式启动（唯一一次启动）==" -ForegroundColor Cyan
 Start-Process cmd -ArgumentList "/c", $cmd -WindowStyle Hidden
 Start-Sleep 35
 $ports = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
