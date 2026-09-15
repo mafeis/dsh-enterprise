@@ -160,5 +160,25 @@ let done = []
   }
 }
 
+// ---------- 4. 默认网关地址（登录页预填） ----------
+// 登录页 server 输入框从 /api/enterprise/status 取 state.gateway 预填；登录提交缺省也用它。
+// 预置 enterprise-state.json = 员工打开登录页时网关地址已经填好，只输账号密码。
+// 已登录过（有 user）绝不动；已有 gateway 也不动（保留上次使用的网关语义）。
+{
+  const file = join(dshHome, 'enterprise', 'enterprise-state.json')
+  const gateway = process.env.ENT_GATEWAY_PRESET ?? ''
+  if (gateway) {
+    let cur = {}
+    try { cur = JSON.parse(readFileSync(file, 'utf8')) ?? {} } catch { /* 损坏视为空 */ }
+    if (cur.user != null) done.push('默认网关（已登录，跳过）')
+    else if (cur.gateway) done.push(`默认网关（已有 ${cur.gateway}，跳过）`)
+    else {
+      mkdirSync(join(dshHome, 'enterprise'), { recursive: true })
+      writeFileSync(file, JSON.stringify({ ...cur, gateway }, null, 2))
+      done.push(`默认网关 ${gateway}（登录页预填）`)
+    }
+  }
+}
+
 console.log('预置完成:')
 for (const d of done) console.log('  ✓ ' + d)

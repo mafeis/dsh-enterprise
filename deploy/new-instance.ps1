@@ -15,13 +15,15 @@
 .PARAMETER Name        实例名（如 ent5）：home=C:\Users\<user>\.<Name>，userData=C:\Users\<user>\.dsh-desktop-<Name>
 .PARAMETER PluginSrc   dsh-enterprise-plugin 仓库路径（取 lib 构建产物）
 .PARAMETER HelperFrom  参照实例的 profiles\desktop（取 hot-reload / startup-guard 实体目录）
+.PARAMETER Gateway      出厂默认网关地址（登录页预填），默认 http://10.102.101.42:8890
 .EXAMPLE
   .\new-instance.ps1 -Name ent5 -PluginSrc D:\mafei\企业版\dsh-enterprise-plugin -HelperFrom C:\Users\Administrator\.dsh-ent2\profiles\desktop
 #>
 param(
   [Parameter(Mandatory)][string]$Name,
   [Parameter(Mandatory)][string]$PluginSrc,
-  [Parameter(Mandatory)][string]$HelperFrom
+  [Parameter(Mandatory)][string]$HelperFrom,
+  [string]$Gateway = 'http://10.102.101.42:8890'
 )
 $ErrorActionPreference = 'Stop'
 $home4 = Join-Path $env:USERPROFILE (".dsh-" + $Name)
@@ -97,7 +99,9 @@ Push-Location $profileDir; pnpm install --offline 2>&1 | Select-Object -Last 1; 
 Write-Host "   dsh-enterprise@$ver 已装"
 
 Write-Host "== 4/5 预置首启状态（向导回执/默认工作区/横幅+增强模式）==" -ForegroundColor Cyan
+$env:ENT_GATEWAY_PRESET = $Gateway
 node "$PluginSrc\deploy\provision-instance.mjs" $home4 $userData desktop
+Remove-Item Env:ENT_GATEWAY_PRESET -ErrorAction SilentlyContinue
 
 Write-Host "== 5/5 正式启动 ==" -ForegroundColor Cyan
 Start-Process cmd -ArgumentList "/c", $cmd -WindowStyle Hidden
