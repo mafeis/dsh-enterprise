@@ -7,11 +7,21 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { writeTextAtomic } from '../shared/fs-utils.js'
 import { dshHome } from '../shared/paths.js'
-import { join } from 'node:path'
+import { join, basename } from 'node:path'
+import { homedir, platform } from 'node:os'
 import { pluginLog } from '../shared/log.js'
 
-/** 候选默认工作目录（按序取第一个存在的） */
-const DEFAULT_WORKSPACE_DIRS = ['D:\\dsh-workspace', 'C:\\dsh-workspace']
+/** 各平台候选默认工作目录（按序取第一个存在的）。
+ *  与企业部署文档约定同名目录 dsh-workspace，各平台放惯常位置：
+ *  - win32: D:\dsh-workspace（数据盘优先，回退 C 盘）
+ *  - darwin: ~/dsh-workspace（家目录；macOS 无固定数据盘约定）
+ *  - linux: ~/dsh-workspace（家目录；服务器/桌面一致）
+ *  另各平台都回退看 ~/DSH-workspace？不——只认小写同名，避免大小写/拼写分裂。
+ */
+function defaultWorkspaceCandidates() {
+  if (platform() === 'win32') return ['D:\\dsh-workspace', 'C:\\dsh-workspace']
+  return [join(homedir(), 'dsh-workspace')]
+}
 
 export function ensureDefaultWorkspace() {
   try {
@@ -20,7 +30,7 @@ export function ensureDefaultWorkspace() {
     const j = JSON.parse(readFileSync(file, 'utf8'))
     const ids = j?.global?.workspaceIds ?? []
     if (ids.length) return // 员工已有工作区：绝不覆盖
-    const dir = DEFAULT_WORKSPACE_DIRS.find((d) => existsSync(d))
+    const dir = defaultWorkspaceCandidates().find((d) => existsSync(d))
     if (!dir) return // 本机没有默认目录：跳过（员工自行选择）
     const id = cryptoRandomId()
     j.global = j.global ?? {}
@@ -30,19 +40,20 @@ export function ensureDefaultWorkspace() {
     j.tables.workspaces = j.tables.workspaces ?? {}
     j.tables.workspaces[id] = {
       path: dir,
-      title: dir.split('\\').filter(Boolean).pop() ?? dir,
+      title: basename(dir) || dir,
       sessionIds: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
     writeTextAtomic(file, JSON.stringify(j, null, 2))
-    pluginLog(`已注册默认工作目录：${dir}（新装机首次登录自动设置）`)
+    pluginLog(`已注册默认工作目录：${dir}（新装机首次登录自动设置，${platform()}）`)
   } catch (e) {
     pluginLog(`默认工作目录注册失败（不影响登录）: ${String(e?.message ?? e).slice(0, 120)}`)
   }
 }
 
-/** 无依赖随机 ID（workspace 记录主键，UUID v4 形态） */
+/** 无依赖随机 ID（workspace 记录主键，UUID v4 形态；Node ≥14.17 直接有 crypto.randomUUID，
+ *  但此文件历史上为零依赖自实现——保留避免引 crypto 子系统差异，行为等价） */
 function cryptoRandomId() {
   const h = '0123456789abcdef'
   let s = ''
