@@ -43,10 +43,33 @@ let hbCounter = 0
 /** 当前心跳状态快照（/status 路由用） */
 export function currentHeartbeatState() { return heartbeatState }
 
+/** 5xx 复核：/auth/verify 说这张票无效（停用/吊销/改密）才算凭证被拒。
+ *  网络失败 / 接口异常 / valid:true 一律返回 false（按普通网关错误处理，不清场）。 */
+async function tokenRejectedByGateway(base, token) {
+  try {
+    const r = await fetch(`${base}/auth/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: '{}',
+      signal: AbortSignal.timeout(5000),
+    })
+    const b = await r.json().catch(() => null)
+    return Boolean(b && b.valid === false)
+  } catch { return false }
+}
+
 /** 停止心跳定时器与状态文件监听（插件卸载 effect disposer 调用） */
 export function stopHeartbeat() {
   if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null }
   stopStateWatcher()
+}
+
+/** 重置模块级判定状态（hb401Streak 等）——仅供测试隔离用，生产流程不调用 */
+export function __resetForTest() {
+  hb401Streak = 0
+  hbFailStreak = 0
+  hbCounter = 0
+  lastModelFingerprint = null
 }
 
 function stopStateWatcher() {
@@ -226,19 +249,21 @@ export async function runHeartbeatOnce() {
           }).catch(() => {})
         }
       }
-    } else if (res.status === 401) {
-      // 凭证被网关明确拒绝（账号停用/令牌吊销/改密）。网络错误不会走到这里（走 catch），
-      // 网关其他 5xx 也不算。连续 2 次（防单拍异常抖动）自动本地清场 →
+    } else if (res.status === 401 || res.status === 403 || ((res.status === 500 || res.status === 502 || res.status === 503) && (await tokenRejectedByGateway(cur.gateway, cur.token ?? '')))) {
+      // 凭证被网关明确拒绝（账号停用/令牌吊销/改密）。网络错误不会走到这里（走 catch）。
+      // 直接 401/403 即判定；500/502/503（网关异常路径可能把拒绝误报成 5xx，如 SQLite 绑定 bug）不轻信，
+      // 用 /auth/verify 复核——valid:false 才算凭证被拒，true/网络失败按普通错误处理不清场。
+      // 连续 2 次（防单拍异常抖动）自动本地清场 →
       // 客户端状态轮询发现 configured=false 即弹出全屏登录遮罩，账号被停用的终端最迟约 1 分钟回登录页
       hb401Streak++
-      heartbeatState = { lastOk: false, lastAt: new Date().toISOString(), lastLatencyMs: Date.now() - started, lastError: `HTTP 401` }
+      heartbeatState = { lastOk: false, lastAt: new Date().toISOString(), lastLatencyMs: Date.now() - started, lastError: `HTTP ${res.status}` }
       if (hb401Streak >= 2) {
         hb401Streak = 0
         try {
-          logoutLocal('心跳 401：账号已被网关停用或凭证被吊销')
-          pluginLog('[enterprise] 心跳连续 401 ×2，已自动清场——请在登录页重新登录（若账号被停用请联系管理员）')
+          logoutLocal('心跳凭证被拒：账号已被网关停用或凭证被吊销')
+          pluginLog('[enterprise] 心跳连续被网关拒绝 ×2，已自动清场——请在登录页重新登录（若账号被停用请联系管理员）')
         } catch (e) {
-          pluginLog(`[enterprise] 心跳 401 自动清场失败: ${String(e?.stack ?? e).slice(0, 400)}`)
+          pluginLog(`[enterprise] 心跳拒绝自动清场失败: ${String(e?.stack ?? e).slice(0, 400)}`)
         }
       }
     } else {

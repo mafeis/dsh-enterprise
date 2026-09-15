@@ -9,7 +9,7 @@ import { join } from 'node:path'
 process.env.DSH_HOME = mkdtempSync(join(tmpdir(), 'dsh-hb-test-'))
 mkdirSync(join(process.env.DSH_HOME, 'enterprise'), { recursive: true })
 
-const { runHeartbeatOnce } = await import('../src-node/heartbeat/heartbeat.js')
+const { runHeartbeatOnce, __resetForTest } = await import('../src-node/heartbeat/heartbeat.js')
 const { readState } = await import('../src-node/state/state.js')
 
 const stateFile = join(process.env.DSH_HOME, 'enterprise', 'enterprise-state.json')
@@ -97,4 +97,40 @@ test('heartbeat 单次 401 或网络错误：不清场（防抖动误伤）', as
   globalThis.fetch = async () => new Response('{}', { status: 401 })
   try { await runHeartbeatOnce() } finally { globalThis.fetch = origFetch }
   assert.equal(readState().user, 'u', '成功拍后计数归零，单次 401 不应清场')
+})
+
+test('heartbeat 5xx 但 /auth/verify 说 token 无效（如网关 SQLite bug 把拒绝报成 500）：连续 2 次也自动清场', async () => {
+  __resetForTest() // 前面的 401 用例给模块级计数留了 1，先归零再测本轮语义
+  setupLoggedIn()
+  const origFetch = globalThis.fetch
+  let verifyCalls = 0
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/auth/verify')) {
+      verifyCalls++
+      return new Response('{"valid":false,"reason":"auth_disabled"}', { status: 200 })
+    }
+    return new Response('{"error":{"message":"TypeError: Provided value cannot be bound to SQLite parameter 2."}}', { status: 500 })
+  }
+  try {
+    await runHeartbeatOnce()
+    assert.equal(readState().user, 'u', '第一次 500+verify 无效：不清场')
+    await runHeartbeatOnce()
+  } finally {
+    globalThis.fetch = origFetch
+  }
+  assert.equal(verifyCalls, 2, '每拍 5xx 都应经 /auth/verify 复核')
+  assert.equal(readState().user, null, '连续 2 次 5xx 且凭证确实无效：应清场')
+  assert.equal(readState().gateway, 'http://gw', '网关地址保留')
+})
+
+test('heartbeat 5xx 且 /auth/verify 正常（网关自身故障）：不清场', async () => {
+  __resetForTest()
+  setupLoggedIn()
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/auth/verify')) return new Response('{"valid":true}', { status: 200 })
+    return new Response('{}', { status: 500 })
+  }
+  try { await runHeartbeatOnce(); await runHeartbeatOnce() } finally { globalThis.fetch = origFetch }
+  assert.equal(readState().user, 'u', 'verify 说票有效：网关 5xx 属网关故障，不应清场')
 })
