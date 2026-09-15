@@ -123,6 +123,35 @@ test('heartbeat 5xx 但 /auth/verify 说 token 无效（如网关 SQLite bug 把
   assert.equal(readState().gateway, 'http://gw', '网关地址保留')
 })
 
+test('heartbeat 响应带显式账号状态 auth.ok=false（新网关）：连续 2 拍自动清场', async () => {
+  __resetForTest()
+  setupLoggedIn()
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/auth/verify')) return new Response('{"valid":false}', { status: 200 })
+    // 新网关：200 + auth.ok=false（心跳不鉴权，账号状态显式透出）
+    return new Response('{"ok":true,"auth":{"ok":false,"reason":"auth_disabled"}}', { status: 200 })
+  }
+  try {
+    await runHeartbeatOnce()
+    assert.equal(readState().user, 'u', '第一拍 auth.ok=false：不清场')
+    await runHeartbeatOnce()
+  } finally {
+    globalThis.fetch = origFetch
+  }
+  assert.equal(readState().user, null, '连续 2 拍 auth.ok=false：应清场')
+  assert.equal(readState().gateway, 'http://gw', '网关地址保留')
+})
+
+test('heartbeat 响应带显式账号状态 auth.ok=true（新网关正常账号）：不清场', async () => {
+  __resetForTest()
+  setupLoggedIn()
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response('{"ok":true,"auth":{"ok":true,"user":"u"}}', { status: 200 })
+  try { await runHeartbeatOnce(); await runHeartbeatOnce() } finally { globalThis.fetch = origFetch }
+  assert.equal(readState().user, 'u', 'auth.ok=true 不应清场')
+})
+
 test('heartbeat 5xx 且 /auth/verify 正常（网关自身故障）：不清场', async () => {
   __resetForTest()
   setupLoggedIn()

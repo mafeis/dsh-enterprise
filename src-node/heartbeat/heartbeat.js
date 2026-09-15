@@ -207,8 +207,29 @@ export async function runHeartbeatOnce() {
       signal: AbortSignal.timeout(6000),
     })
     if (res.ok) {
-      hb401Streak = 0
       const rb = await res.json().catch(() => ({}))
+      // 账号状态显式判定（首选）：网关 /heartbeat 200 响应带 auth 状态（不鉴权的遥测端点顺带
+      // authenticate 透出）——auth.ok=false 即账号停用/凭证吊销/账号删除，走与 401 同一清场计数。
+      // 显式状态优先于状态码猜测；旧网关（响应无 auth 字段）回落到下方 401/403/5xx+verify 判定。
+      // 注意必须在 hb401Streak 归零之前判定，否则每拍 200 都把计数清零、永远凑不满 2 次。
+      if (rb.auth && rb.auth.ok === false) {
+        hb401Streak++
+        heartbeatState = { lastOk: false, lastAt: new Date().toISOString(), lastLatencyMs: Date.now() - started, lastError: `账号状态异常(${rb.auth.reason ?? 'unknown'})` }
+        if (hb401Streak >= 2) {
+          hb401Streak = 0
+          try {
+            logoutLocal(`网关心跳上报账号状态异常（${rb.auth.reason ?? 'unknown'}）`)
+            pluginLog('[enterprise] 网关连续 2 拍上报账号状态异常，已自动清场——请在登录页重新登录（若账号被停用请联系管理员）')
+          } catch (e) {
+            pluginLog(`[enterprise] 账号状态异常自动清场失败: ${String(e?.stack ?? e).slice(0, 400)}`)
+          }
+          try { saveState({ heartbeat: heartbeatState }) } catch { /* 状态落盘失败不影响流程 */ }
+          return heartbeatState
+        }
+        try { saveState({ heartbeat: heartbeatState }) } catch { /* 状态落盘失败不影响流程 */ }
+        return heartbeatState
+      }
+      hb401Streak = 0
       if (rb.deviceAccepted === false) {
         // 网关没有该设备的快照（首次/库被清），下次强制全量
         forceFullDevice = true
