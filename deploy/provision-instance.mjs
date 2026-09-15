@@ -34,7 +34,7 @@ if (!existsSync(profileDir)) {
 
 let done = []
 
-// ---------- 1. 桌面向导回执 ----------
+// ---------- 1. 桌面向导回执 + 桌面模式首选项（真正的持久层） ----------
 {
   const hash = createHash('sha256').update(profileDir).digest('hex')
   const dir = join(userDataArg, 'profile-setup', hash)
@@ -48,6 +48,35 @@ let done = []
     }, null, 2))
     done.push(`桌面向导回执（${hash.slice(0, 12)}…）`)
   } else done.push('桌面向导回执（已存在，跳过）')
+
+  // ⚠ dsh-desktop.mode 的真正持久层是 userData\profile-preferences\<profileHash>\state.json，
+  //   settings.yaml 的 dsh-desktop 段只是宿主启动时的投影（改 settings.yaml 主不动=不生效，ent7 实证）。
+  //   预置这里 → 宿主首启读到 advanced → 一次启动即终态，无需二次重启。
+  const pfDir = join(userDataArg, 'profile-preferences', hash)
+  const pfFile = join(pfDir, 'state.json')
+  if (!existsSync(pfFile)) {
+    mkdirSync(pfDir, { recursive: true })
+    writeFileSync(pfFile, JSON.stringify({
+      version: 1, profileHash: hash, mode: 'advanced',
+      openBrowser: false, networkExposure: 'loopback',
+      notifications: {
+        enabled: true, notifyOnTurnCompletion: true, notifyOnTurnFailure: true,
+        notifyOnJobCompletion: true, notifyOnJobFailure: true,
+      },
+      aaEnabled: false, market: 'disabled',
+      recordedAt: new Date().toISOString(),
+    }, null, 2))
+    done.push(`桌面模式首选项（增强模式，${hash.slice(0, 12)}…）`)
+  } else {
+    const cur = (() => { try { return JSON.parse(readFileSync(pfFile, 'utf8'))?.mode } catch { return null } })()
+    if (cur === 'compatibility') {
+      // 宿主骨架启动落盘的默认值，不是员工选择——覆盖为 advanced（员工自己改过的不动）
+      const j = JSON.parse(readFileSync(pfFile, 'utf8'))
+      j.mode = 'advanced'
+      writeFileSync(pfFile, JSON.stringify(j, null, 2))
+      done.push('桌面模式首选项（默认 compatibility → 增强模式）')
+    } else done.push('桌面模式首选项（已有，跳过）')
+  }
 }
 
 // ---------- 2. 默认工作区 ----------
@@ -78,12 +107,17 @@ let done = []
   } else done.push('默认工作区（storages 未初始化，登录后插件会注册）')
 }
 
-// ---------- 3. settings 预签（ui-onboarding；dsh-desktop.mode 交给插件启动后写） ----------
-// ⚠ dsh-desktop 段不能预置：宿主启动读 settings 后按 schema **整段重写**（ent6 实测，
-//   预置的 mode: advanced 被默认值 compatibility 连Material等键一起顶掉）。
-//   增强模式由插件 activation 时写入（用户已选不覆盖），流水线最后自动重启一次生效。
+// ---------- 3. settings 预签（ui-onboarding + dsh-desktop.mode） ----------
+// ⚠ 时序真相（ent6 复盘）：骨架启动时宿主生成默认 settings（dsh-desktop.mode=compatibility
+//   整段落盘）；预置在其后跑，"段存在且有 mode 键→尊重不覆盖"的守卫导致 advanced 永远写不进。
+//   compatibility 在这里是宿主默认落盘，不是员工选择——新装机交付要覆盖为 advanced。
+//   区分依据：enterprise-state.json 无 user = 员工从未自己登录配置过 → 可安全覆盖。
 {
   const file = join(profileDir, 'settings.yaml')
+  const stateFile = join(dshHome, 'enterprise', 'enterprise-state.json')
+  const userConfigured = (() => {
+    try { return JSON.parse(readFileSync(stateFile, 'utf8'))?.user != null } catch { return false }
+  })()
   if (existsSync(file)) {
     let t = readFileSync(file, 'utf8')
     let changed = false
@@ -94,12 +128,26 @@ let done = []
       t = t.replace(/^(ui-onboarding:\s*$)/m, '$1\n  welcomeNoticeVersion: ' + WELCOME_NOTICE_VERSION)
       changed = true
     }
-    if (changed) { writeFileSync(file, t); done.push('settings 预签（横幅回执）') }
+    if (!userConfigured) {
+      if (!/^dsh-desktop:/m.test(t)) {
+        t += '\ndsh-desktop:\n  mode: advanced\n'
+        changed = true
+      } else if (/^\s+mode:\s*compatibility\s*$/m.test(t)) {
+        t = t.replace(/^(\s+)mode:\s*compatibility\s*$/m, '$1mode: advanced')
+        changed = true
+      } else if (!/^\s+mode:/m.test(t)) {
+        t = t.replace(/^(dsh-desktop:\s*$)/m, '$1\n  mode: advanced')
+        changed = true
+      }
+    }
+    if (changed) { writeFileSync(file, t); done.push('settings 预签（横幅回执' + (userConfigured ? '' : ' + 增强模式') + '）') }
     else done.push('settings 预签（已齐，跳过）')
   } else {
     // settings.yaml 尚未生成（宿主首次启动才有骨架）：预建最小骨架。
     // 不预建的话宿主本次启动读不到回执 → 内测横幅在登录前弹一次（ent5 实测）。
     // 骨架含 llm-deepseek 屏蔽段；登录时 syncOneMainSettingsProvider 走"已存在"分支正常插入 provider。
+    // ⚠ 不写 dsh-desktop 段：mode 的主持久层是 profile-preferences state.json（上面已预置），
+    //   settings.yaml 的段由宿主从 state.json 投影生成。
     const skeleton = [
       'ui-onboarding:',
       '  welcomeNoticeVersion: ' + WELCOME_NOTICE_VERSION,
@@ -108,7 +156,7 @@ let done = []
       '',
     ].join('\n')
     writeFileSync(file, skeleton)
-    done.push('settings 预建骨架（横幅回执 + deepseek 屏蔽；增强模式由插件激活后写入）')
+    done.push('settings 预建骨架（横幅回执 + deepseek 屏蔽；增强模式在 profile-preferences）')
   }
 }
 

@@ -43,7 +43,16 @@ function Stop-Instance {
   Get-CimInstance Win32_Process -Filter "Name like 'DSH%'" |
     Where-Object { $_.CommandLine -like ("*dsh-desktop-" + $Name + "*") } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-  Start-Sleep 4
+  # 等进程真正退出（轮询至 0，最长 20s）——宿主退出途中会异步写盘（settings 归一化），
+  # 固定 sleep 不够：退出写盘晚于预置会顶掉预置值（ent6 实测 mode 被写回 compatibility）
+  $deadline = (Get-Date).AddSeconds(20)
+  while ((Get-Date) -lt $deadline) {
+    $left = (Get-CimInstance Win32_Process -Filter "Name like 'DSH%'" |
+      Where-Object { $_.CommandLine -like ("*dsh-desktop-" + $Name + "*") } | Measure-Object).Count
+    if ($left -eq 0) { break }
+    Start-Sleep 1
+  }
+  Start-Sleep 2  # 退出写盘缓冲
 }
 
 Write-Host "== 1/5 骨架启动（生成 profile，无插件首启）==" -ForegroundColor Cyan
@@ -90,12 +99,7 @@ Write-Host "   dsh-enterprise@$ver 已装"
 Write-Host "== 4/5 预置首启状态（向导回执/默认工作区/横幅+增强模式）==" -ForegroundColor Cyan
 node "$PluginSrc\deploy\provision-instance.mjs" $home4 $userData desktop
 
-Write-Host "== 5/5 正式启动（增强模式由插件激活写入，自动重启一次生效）==" -ForegroundColor Cyan
-Start-Process cmd -ArgumentList "/c", $cmd -WindowStyle Hidden
-Start-Sleep 35
-# 插件 activation 已把 dsh-desktop.mode=advanced 写入 settings（宿主首启读的预置骨架没有 mode）——
-# 重启一次让宿主读到增强模式；顺带让全部回执在"宿主读状态"时序里就位
-Stop-Instance
+Write-Host "== 5/5 正式启动 ==" -ForegroundColor Cyan
 Start-Process cmd -ArgumentList "/c", $cmd -WindowStyle Hidden
 Start-Sleep 35
 $ports = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
