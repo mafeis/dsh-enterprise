@@ -304,7 +304,7 @@ export function createRoutes(ctx) {
         const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)) }
         const state = readState()
         if (!state.gateway) return json(400, { ok: false, error: '尚未登录' })
-        const r = await runHeartbeatOnce(state)
+        const r = await runHeartbeatOnce()
         json(200, { ok: true, heartbeat: r })
       },
     },

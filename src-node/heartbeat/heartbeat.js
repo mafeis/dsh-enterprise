@@ -3,6 +3,8 @@
  *  - 增量上报：device 只在变化时发送（网关 deviceAccepted=false 时下次强制全量）
  *  - 令牌滑动续期：跟随心跳每 10 次调一次 /auth/refresh，活跃使用永不过期
  *  - modelFingerprint 联动：网关模型目录指纹变化 → 自动 repairConfigure
+ *  - 状态热生效：网关地址每拍重读状态文件（换网关无需重启实例）；
+ *    心跳开关/间隔经状态文件监听秒级重载，每拍 tick 还有一层配置比对兜底
  */
 import { writeCredential } from '../settings/provider-config.js'
 import { saveState, readState } from '../state/state.js'
@@ -10,11 +12,23 @@ import { collectDeviceInfo } from '../device/device-info.js'
 import { pluginLog, ctxLoggerInfoSafe } from '../shared/log.js'
 import { repairConfigure } from '../auth/login.js'
 import { enforcePluginAllowlist, PROTECTED_PLUGINS, retryPendingPluginEntities } from '../enforce/plugin-enforce.js'
+import { statePath } from '../shared/paths.js'
+import { watch } from 'node:fs'
+import { dirname } from 'node:path'
 
 let heartbeatTimer = null
 let heartbeatState = { lastOk: false, lastAt: '', lastLatencyMs: -1, lastError: '' }
 let lastModelFingerprint = null
 let hbFailStreak = 0
+
+/** 当前生效的心跳配置指纹（JSON 字符串）：与状态文件不一致即热重载定时器 */
+const HB_DEFAULT = { enabled: true, intervalSec: 60 }
+const hbKeyOf = (s) => JSON.stringify(s?.heartbeatConfig ?? HB_DEFAULT)
+let runningHbKey = null
+
+/** 状态文件监听句柄（监听目录而非文件：原子写是 rename 替换，Windows 上 watch 单文件会失联） */
+let stateWatcher = null
+let watchDebounce = null
 
 /** 最近一次实际发送成功的 device JSON / 网关缺快照时置 true，下次发全量 */
 let lastSentDeviceJson = null
@@ -26,9 +40,66 @@ let hbCounter = 0
 /** 当前心跳状态快照（/status 路由用） */
 export function currentHeartbeatState() { return heartbeatState }
 
-/** 停止心跳定时器（插件卸载 effect disposer 调用） */
+/** 停止心跳定时器与状态文件监听（插件卸载 effect disposer 调用） */
 export function stopHeartbeat() {
   if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null }
+  stopStateWatcher()
+}
+
+function stopStateWatcher() {
+  if (watchDebounce) { clearTimeout(watchDebounce); watchDebounce = null }
+  if (stateWatcher) { try { stateWatcher.close() } catch { /* 已关闭视为成功 */ } stateWatcher = null }
+}
+
+/** 监听状态文件所在目录：心跳开关/间隔改动 → 防抖后热重载定时器。
+ *  watcher 是"秒级响应"的加速器而非依赖——每拍 tick 的配置比对兜底保证
+ *  即使 watcher 失效（权限/平台差异），配置最迟下一个心跳周期也会生效。 */
+function startStateWatcher(ctx) {
+  stopStateWatcher()
+  try {
+    const dir = dirname(statePath())
+    const base = statePath().slice(dir.length + 1)
+    stateWatcher = watch(dir, (_event, filename) => {
+      // 只关心状态文件本身；同目录的 .tmp-* 原子写中间文件忽略
+      if (filename && filename !== base) return
+      if (watchDebounce) clearTimeout(watchDebounce)
+      watchDebounce = setTimeout(() => { watchDebounce = null; resyncIfConfigChanged(ctx) }, 300)
+    })
+    stateWatcher.on?.('error', () => stopStateWatcher())
+  } catch { stateWatcher = null }
+}
+
+/** 配置变化检测：读状态文件比对指纹，变了才重载（watcher 每拍 saveState 都会触发，须幂等） */
+function resyncIfConfigChanged(ctx) {
+  try {
+    const cur = readState()
+    if (hbKeyOf(cur) !== runningHbKey) resyncHeartbeat(ctx)
+  } catch { /* 状态文件暂不可读：等下拍兜底 */ }
+}
+
+function resyncHeartbeat(ctx) {
+  const cur = readState()
+  const hb = cur.heartbeatConfig ?? HB_DEFAULT
+  runningHbKey = hbKeyOf(cur)
+  startTimer(ctx, hb.enabled && Boolean(cur.gateway), hb.intervalSec)
+  ctx?.logger?.info?.(`[enterprise] 心跳配置热重载：${hb.enabled ? `${hb.intervalSec}s/拍` : '已停止'}`)
+}
+
+function startTimer(ctx, active, intervalSec) {
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null }
+  if (!active) return
+  const ms = Math.max(15, intervalSec) * 1000
+  // .catch 兜底：定时器里的 rejection 若无人接就是未处理 rejection → 崩宿主进程
+  heartbeatTimer = setInterval(() => { heartbeatTick(ctx).catch(() => {}) }, ms)
+  heartbeatTick(ctx).catch(() => {})
+}
+
+/** 单拍流程：重读状态 → 配置指纹变化先热重载；未登录/已登出（无网关地址）静默跳过 */
+async function heartbeatTick(ctx) {
+  const cur = readState()
+  if (runningHbKey !== null && hbKeyOf(cur) !== runningHbKey) { resyncHeartbeat(ctx); return }
+  if (!cur.gateway) return
+  await runHeartbeatOnce()
 }
 
 /** ============ 心跳增量上报：device 只在变化时发送 ============
@@ -60,12 +131,12 @@ function diffDeviceChanged(dev) {
  * - 剩余寿命 ≤ 15 天：换发新 30 天票，插件写回凭证文件
  * 这样长期在线的设备永不掉线；登出/改密后旧票立即失效，续期自然失败
  */
-async function refreshTokenIfNeeded(state, st) {
+async function refreshTokenIfNeeded(base, st) {
   hbCounter++
   if (hbCounter % 10 !== 1) return // 每 10 次心跳续一次
   if (!st.token) return
   try {
-    const res = await fetch(`${state.gateway}/auth/refresh`, {
+    const res = await fetch(`${base}/auth/refresh`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${st.token}` },
       body: '{}',
@@ -81,11 +152,17 @@ async function refreshTokenIfNeeded(state, st) {
   } catch { /* 网络抖动忽略，下轮再试 */ }
 }
 
-export async function runHeartbeatOnce(state) {
+export async function runHeartbeatOnce() {
   const started = Date.now()
   try {
     const st = readState()
-    await refreshTokenIfNeeded(state, st)
+    const base = st.gateway
+    if (!base) {
+      // 未登录/已登出：不报错不重试，等下次登录（syncHeartbeatTimer 会因 gateway 缺失不起表）
+      heartbeatState = { lastOk: false, lastAt: new Date().toISOString(), lastLatencyMs: -1, lastError: '' }
+      return heartbeatState
+    }
+    await refreshTokenIfNeeded(base, st)
     const cur = readState()
     const dev = await collectDeviceInfo()
     const body = {
@@ -95,7 +172,8 @@ export async function runHeartbeatOnce(state) {
     if (diffDeviceChanged(dev)) {
       body.device = dev
     }
-    const res = await fetch(`${state.gateway}/heartbeat`, {
+    // 每拍用刚重读的网关地址：登录态文件里 gateway 变了，最迟下拍即切换，无需重启实例
+    const res = await fetch(`${cur.gateway}/heartbeat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${cur.token ?? ''}` },
       body: JSON.stringify(body),
@@ -171,13 +249,9 @@ export async function runHeartbeatOnce(state) {
 
 export function syncHeartbeatTimer(ctx) {
   const state = readState()
-  const hb = state.heartbeatConfig ?? { enabled: true, intervalSec: 60 }
-  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null }
-  if (hb.enabled && state.gateway) {
-    const ms = Math.max(15, hb.intervalSec) * 1000
-    // .catch 兜底：定时器里的 rejection 若无人接就是未处理 rejection → 崩宿主进程
-    heartbeatTimer = setInterval(() => { runHeartbeatOnce(state).catch(() => {}) }, ms)
-    runHeartbeatOnce(state).catch(() => {})
-  }
-  ctx?.logger?.info?.(`[enterprise] 心跳 ${hb.enabled ? `已启动（${hb.intervalSec}s）` : '已停止'}`)
+  const hb = state.heartbeatConfig ?? HB_DEFAULT
+  runningHbKey = hbKeyOf(state)
+  startTimer(ctx, hb.enabled && Boolean(state.gateway), hb.intervalSec)
+  startStateWatcher(ctx)
+  ctx?.logger?.info?.(`[enterprise] 心跳 ${hb.enabled ? `已启动（${hb.intervalSec}s）` : '已停止'}；网关地址与心跳配置热生效`)
 }
