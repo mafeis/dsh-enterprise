@@ -4,6 +4,7 @@ import { writeTextAtomic, readJsonSafe } from '../shared/fs-utils.js'
 import { entSettingsFile, credentialsFile } from '../shared/paths.js'
 import { pluginLog } from '../shared/log.js'
 import { syncMainSettingsProvider } from './yaml-edit.js'
+import { ensureDefaultWorkspace } from './default-workspace.js'
 
 /** 写 enterprise-settings.yaml（插件托管层）+ 同步主 settings.yaml（llm-pi-ai 运行时解析处） */
 export function writeProviderConfig(base, models) {
@@ -22,6 +23,8 @@ export function writeProviderConfig(base, models) {
   writeTextAtomic(settingsPath, JSON.stringify(settings, null, 2))
   // 同步主 settings.yaml（llm-pi-ai 运行时从这里解析 provider）——与 logout 的清理对称
   syncMainSettingsProvider(base, models)
+  // 新装机首次登录：自动注册默认工作目录（已有 workspace 则不动）
+  ensureDefaultWorkspace()
 }
 
 /** 把 ENT_GATEWAY_TOKEN 写进 .credentials.yaml 的 refs 段（存在则覆盖，不存在则补 refs: 骨架） */
