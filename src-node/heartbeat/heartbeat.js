@@ -7,7 +7,7 @@
  *    心跳开关/间隔经状态文件监听秒级重载，每拍 tick 还有一层配置比对兜底
  */
 import { writeCredential } from '../settings/provider-config.js'
-import { saveState, readState } from '../state/state.js'
+import { saveState, readState, readToken } from '../state/state.js'
 import { collectDeviceInfo } from '../device/device-info.js'
 import { pluginLog, ctxLoggerInfoSafe } from '../shared/log.js'
 import { repairConfigure } from '../auth/login.js'
@@ -157,14 +157,14 @@ function diffDeviceChanged(dev) {
  * - 剩余寿命 ≤ 15 天：换发新 30 天票，插件写回凭证文件
  * 这样长期在线的设备永不掉线；登出/改密后旧票立即失效，续期自然失败
  */
-async function refreshTokenIfNeeded(base, st) {
+async function refreshTokenIfNeeded(base, token) {
   hbCounter++
   if (hbCounter % 10 !== 1) return // 每 10 次心跳续一次
-  if (!st.token) return
+  if (!token) return
   try {
     const res = await fetch(`${base}/auth/refresh`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${st.token}` },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: '{}',
       signal: AbortSignal.timeout(5000),
     })
@@ -189,8 +189,9 @@ export async function runHeartbeatOnce() {
       heartbeatState = { lastOk: false, lastAt: new Date().toISOString(), lastLatencyMs: -1, lastError: '' }
       return heartbeatState
     }
-    await refreshTokenIfNeeded(base, st)
+    await refreshTokenIfNeeded(base, readToken())
     const cur = readState()
+    const liveToken = readToken() ?? ''
     const dev = await collectDeviceInfo()
     const body = {
       profile: 'web', env: 'dsh-plugin', policyVersion: 'enterprise-0.2', node: process.version,
@@ -199,10 +200,11 @@ export async function runHeartbeatOnce() {
     if (diffDeviceChanged(dev)) {
       body.device = dev
     }
-    // 每拍用刚重读的网关地址：登录态文件里 gateway 变了，最迟下拍即切换，无需重启实例
+    // 每拍用刚重读的网关地址与凭证文件里的真实 token：state.token 从不存真票（只存预览），
+    // 此前 Bearer 一直是空串——旧网关心跳不校验没暴露，auth 显式状态上线后空票=auth_missing 被误清场
     const res = await fetch(`${cur.gateway}/heartbeat`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${cur.token ?? ''}` },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${liveToken}` },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(6000),
     })
@@ -212,7 +214,9 @@ export async function runHeartbeatOnce() {
       // authenticate 透出）——auth.ok=false 即账号停用/凭证吊销/账号删除，走与 401 同一清场计数。
       // 显式状态优先于状态码猜测；旧网关（响应无 auth 字段）回落到下方 401/403/5xx+verify 判定。
       // 注意必须在 hb401Streak 归零之前判定，否则每拍 200 都把计数清零、永远凑不满 2 次。
-      if (rb.auth && rb.auth.ok === false) {
+      // auth_missing（空票）不计入清场：那是"这拍没带票"（登出/清场后残拍、登录竞态窗口），
+      // 不是网关对有效票的否定——停用/吊销/删除都有专属 reason，凭那些判定。
+      if (rb.auth && rb.auth.ok === false && rb.auth.reason !== 'auth_missing') {
         hb401Streak++
         heartbeatState = { lastOk: false, lastAt: new Date().toISOString(), lastLatencyMs: Date.now() - started, lastError: `账号状态异常(${rb.auth.reason ?? 'unknown'})` }
         if (hb401Streak >= 2) {
@@ -270,7 +274,7 @@ export async function runHeartbeatOnce() {
           }).catch(() => {})
         }
       }
-    } else if (res.status === 401 || res.status === 403 || ((res.status === 500 || res.status === 502 || res.status === 503) && (await tokenRejectedByGateway(cur.gateway, cur.token ?? '')))) {
+    } else if (res.status === 401 || res.status === 403 || ((res.status === 500 || res.status === 502 || res.status === 503) && (await tokenRejectedByGateway(cur.gateway, liveToken)))) {
       // 凭证被网关明确拒绝（账号停用/令牌吊销/改密）。网络错误不会走到这里（走 catch）。
       // 直接 401/403 即判定；500/502/503（网关异常路径可能把拒绝误报成 5xx，如 SQLite 绑定 bug）不轻信，
       // 用 /auth/verify 复核——valid:false 才算凭证被拒，true/网络失败按普通错误处理不清场。

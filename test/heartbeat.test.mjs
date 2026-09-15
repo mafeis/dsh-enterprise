@@ -143,6 +143,29 @@ test('heartbeat 响应带显式账号状态 auth.ok=false（新网关）：连�
   assert.equal(readState().gateway, 'http://gw', '网关地址保留')
 })
 
+test('heartbeat auth_missing（空票残拍）：不清场不计入清场计数', async () => {
+  __resetForTest()
+  setupLoggedIn()
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response('{"ok":true,"auth":{"ok":false,"reason":"auth_missing"}}', { status: 200 })
+  try { await runHeartbeatOnce(); await runHeartbeatOnce(); await runHeartbeatOnce() } finally { globalThis.fetch = origFetch }
+  assert.equal(readState().user, 'u', 'auth_missing 是空票残拍语义，不应清场')
+})
+
+test('heartbeat 带凭证文件里的真实 token（state.token 恒 null 不影响 Bearer）', async () => {
+  __resetForTest()
+  setupLoggedIn()
+  const origFetch = globalThis.fetch
+  let authHeader = ''
+  globalThis.fetch = async (url, opts = {}) => {
+    if (String(url).endsWith('/auth/verify')) return new Response('{"valid":true}', { status: 200 })
+    authHeader = opts.headers?.authorization ?? ''
+    return new Response('{"ok":true,"auth":{"ok":true}}', { status: 200 })
+  }
+  try { await runHeartbeatOnce() } finally { globalThis.fetch = origFetch }
+  assert.equal(authHeader, 'Bearer tok', 'Bearer 应取凭证文件里的真实 token，而非 state.token（恒 null）')
+})
+
 test('heartbeat 响应带显式账号状态 auth.ok=true（新网关正常账号）：不清场', async () => {
   __resetForTest()
   setupLoggedIn()
