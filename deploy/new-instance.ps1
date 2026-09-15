@@ -24,16 +24,24 @@ param(
   [Parameter(Mandatory)][string]$HelperFrom
 )
 $ErrorActionPreference = 'Stop'
-$home4 = Join-Path $env:USERPROFILE ".$Name"
+$home4 = Join-Path $env:USERPROFILE (".dsh-" + $Name)
 $cmd = Join-Path $home4 'start-ent-desktop.cmd'
-if (-not (Test-Path $cmd)) { Write-Error "启动脚本不存在: $cmd（先手工建好 home+脚本再跑）" }
-$userData = Join-Path $env:USERPROFILE ".dsh-desktop-$Name"
+$userData = Join-Path $env:USERPROFILE (".dsh-desktop-" + $Name)
 $profileDir = Join-Path $home4 'profiles\desktop'
 $exe = "$env:LOCALAPPDATA\Programs\DSH Desktop\DSH Desktop.exe"
 
+# 全自动建 home + 启动脚本（不存在时）——一步到位，不再要求手工预建
+if (-not (Test-Path $cmd)) {
+  New-Item -ItemType Directory -Path $home4 -Force | Out-Null
+  $q = [char]34
+  $lines = '@echo off', "set ${q}DSH_HOME=$home4$q", "start ${q}${q} ${q}$exe$q --user-data-dir=$userData"
+  [System.IO.File]::WriteAllBytes($cmd, [System.Text.Encoding]::ASCII.GetBytes(($lines -join "`r`n")))
+  Write-Host "已创建 $cmd"
+}
+
 function Stop-Instance {
   Get-CimInstance Win32_Process -Filter "Name like 'DSH%'" |
-    Where-Object { $_.CommandLine -like "*dsh-desktop-$Name*" } |
+    Where-Object { $_.CommandLine -like ("*dsh-desktop-" + $Name + "*") } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
   Start-Sleep 4
 }
@@ -82,10 +90,15 @@ Write-Host "   dsh-enterprise@$ver 已装"
 Write-Host "== 4/5 预置首启状态（向导回执/默认工作区/横幅+增强模式）==" -ForegroundColor Cyan
 node "$PluginSrc\deploy\provision-instance.mjs" $home4 $userData desktop
 
-Write-Host "== 5/5 正式启动 ==" -ForegroundColor Cyan
+Write-Host "== 5/5 正式启动（增强模式由插件激活写入，自动重启一次生效）==" -ForegroundColor Cyan
 Start-Process cmd -ArgumentList "/c", $cmd -WindowStyle Hidden
-Start-Sleep 30
-$port = (Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+Start-Sleep 35
+# 插件 activation 已把 dsh-desktop.mode=advanced 写入 settings（宿主首启读的预置骨架没有 mode）——
+# 重启一次让宿主读到增强模式；顺带让全部回执在"宿主读状态"时序里就位
+Stop-Instance
+Start-Process cmd -ArgumentList "/c", $cmd -WindowStyle Hidden
+Start-Sleep 35
+$ports = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
   Where-Object { $_.LocalPort -ge 43120 -and $_.LocalPort -le 43139 } |
-  Sort-Object LocalPort).LocalPort
-Write-Host "完成。实例 $Name 运行中，端口: $($port -join ', ')" -ForegroundColor Green
+  Select-Object -ExpandProperty LocalPort | Sort-Object
+Write-Host "完成。实例 $Name 运行中。打开 http://127.0.0.1:$($ports[-1]) 即首启终态（无弹窗+增强模式），登录后模型/工作区全就位" -ForegroundColor Green

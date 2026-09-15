@@ -78,7 +78,10 @@ let done = []
   } else done.push('默认工作区（storages 未初始化，登录后插件会注册）')
 }
 
-// ---------- 3. settings 预签（ui-onboarding + dsh-desktop.mode） ----------
+// ---------- 3. settings 预签（ui-onboarding；dsh-desktop.mode 交给插件启动后写） ----------
+// ⚠ dsh-desktop 段不能预置：宿主启动读 settings 后按 schema **整段重写**（ent6 实测，
+//   预置的 mode: advanced 被默认值 compatibility 连Material等键一起顶掉）。
+//   增强模式由插件 activation 时写入（用户已选不覆盖），流水线最后自动重启一次生效。
 {
   const file = join(profileDir, 'settings.yaml')
   if (existsSync(file)) {
@@ -91,14 +94,7 @@ let done = []
       t = t.replace(/^(ui-onboarding:\s*$)/m, '$1\n  welcomeNoticeVersion: ' + WELCOME_NOTICE_VERSION)
       changed = true
     }
-    if (!/^dsh-desktop:/m.test(t)) {
-      t += '\ndsh-desktop:\n  mode: advanced\n'
-      changed = true
-    } else if (!/^\s+mode:/m.test(t)) {
-      t = t.replace(/^(dsh-desktop:\s*$)/m, '$1\n  mode: advanced')
-      changed = true
-    }
-    if (changed) { writeFileSync(file, t); done.push('settings 预签（横幅回执 + 增强模式）') }
+    if (changed) { writeFileSync(file, t); done.push('settings 预签（横幅回执）') }
     else done.push('settings 预签（已齐，跳过）')
   } else {
     // settings.yaml 尚未生成（宿主首次启动才有骨架）：预建最小骨架。
@@ -107,14 +103,12 @@ let done = []
     const skeleton = [
       'ui-onboarding:',
       '  welcomeNoticeVersion: ' + WELCOME_NOTICE_VERSION,
-      'dsh-desktop:',
-      '  mode: advanced',
       'llm-deepseek:',
       '  models: []',
       '',
     ].join('\n')
     writeFileSync(file, skeleton)
-    done.push('settings 预建骨架（横幅回执 + 增强模式 + deepseek 屏蔽）')
+    done.push('settings 预建骨架（横幅回执 + deepseek 屏蔽；增强模式由插件激活后写入）')
   }
 }
 
