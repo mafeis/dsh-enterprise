@@ -1,6 +1,6 @@
 {
     "name":  "dsh-enterprise",
-    "version":  "0.9.1",
+    "version":  "0.9.2",
     "description":  "DSH enterprise client plugin: unified enterprise sign-in, model gateway provisioning and policy governance",
     "type":  "module",
     "engines":  {

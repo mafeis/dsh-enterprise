@@ -196,7 +196,23 @@ export function syncOneMainSettingsProvider(mainSettings, base, models) {
     lines.push('llm-deepseek:', '  models: []')
   }
   ensureWelcomeNoticeSection(lines)
+  ensureDesktopAdvancedMode(lines)
   writeTextAtomic(mainSettings, lines.join('\n'))
+}
+
+/** 员工端统一增强模式（dsh-desktop.mode: advanced，桌面专用布局）。
+ *  宿主默认 compatibility（兼容模式）；已存在任何 mode 值（用户选过）则不覆盖。 */
+export function ensureDesktopAdvancedMode(lines) {
+  if (!lines.some((l) => /^dsh-desktop:\s*$/.test(l))) {
+    lines.push('dsh-desktop:', '  mode: advanced')
+    return
+  }
+  const idx = lines.findIndex((l) => /^dsh-desktop:\s*$/.test(l))
+  const end = lines.findIndex((l, i) => i > idx && /^[^\s]/.test(l))
+  const seg = lines.slice(idx + 1, end === -1 ? lines.length : end)
+  if (!seg.some((l) => /^\s+mode:/.test(l))) {
+    lines.splice(idx + 1, 0, '  mode: advanced')
+  }
 }
 
 /** 宿主 WELCOME_NOTICE_VERSION（内测横幅横幅版本）——settings 里精确相等即不弹。
@@ -217,7 +233,7 @@ export function ensureWelcomeNoticeSection(lines) {
   }
 }
 
-/** 插件激活即预签内测横幅（不等到登录）——新装机在登录遮罩之前就会弹横幅，
+/** 插件激活即预签内测横幅 + 增强模式（不等到登录）——新装机在登录遮罩之前就会弹横幅，
  *  挂在登录流程里签不住这个时序。对主 settings 与所有 profile patch settings 生效。 */
 export function ensureWelcomeNoticeAck() {
   const targets = new Set([dshSettingsFile()])
@@ -229,10 +245,11 @@ export function ensureWelcomeNoticeAck() {
       const lines = raw.split('\n')
       const before = lines.join('\n')
       ensureWelcomeNoticeSection(lines)
+      ensureDesktopAdvancedMode(lines)
       const after = lines.join('\n')
       if (after !== before) {
         writeTextAtomic(file, after)
-        ctxLoggerInfoSafe(`[enterprise] 已预签内测横幅回执: ${file}`)
+        ctxLoggerInfoSafe(`[enterprise] 已预签内测横幅回执 + 增强模式: ${file}`)
       }
     } catch { /* 单个目标失败不影响其他 */ }
   }
