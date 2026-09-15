@@ -383,6 +383,9 @@ export function createRoutes(ctx) {
           if (r.ok) {
             ctx.logger.info(`[enterprise] 用户 ${r.user} 登录成功，已配置 ${r.models.length} 个企业模型`)
             pluginLog(`登录成功 user=${r.user} server=${body.server ?? state.gateway ?? '(出厂默认)'} 模型=${r.models.length} 个`)
+            // 登录成功立即补一拍心跳：状态面板马上从"离线/账号状态异常(旧残留)"翻成在线，
+            // 不等下一拍（最长 intervalSec）；此刻凭证已写入，心跳带真票，网关回 auth.ok=true
+            void runHeartbeatOnce().catch(() => { /* 即时心跳失败不影响登录流程 */ })
             // 登录后自动补一次 repairConfigure（与"一键配置 Provider"同一函数，幂等）：
             // 220 实机发现登录写入在个别机器上未即时反映到模型选择器（要手动点一键配置
             // 才好），延迟补写保证跟手动点击完全同路径、同结果，员工零操作。
