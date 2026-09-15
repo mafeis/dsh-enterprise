@@ -1,0 +1,199 @@
+/**
+ * 主 settings.yaml 的行级 YAML 改写（不引入 YAML 依赖、不破坏注释/顺序）。
+ *
+ * ⚠ 历史踩坑重灾区（详见 docs/客户端插件核心文档.md §6）：
+ *  - 正则改 settings.yaml 极易翻车，改动这里必须配 test/yaml-edit.test.mjs 单测
+ *  - llm-pi-ai 段校验红线：模型 input 只能 text/image；reasoningEfforts 必须 dict；
+ *    违反 → 整个 ns 不注册 → 企业模型全部消失且无显式报错
+ *  - llm-deepseek 屏蔽段（models: []）登录/登出两条路径都必须保证
+ */
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { writeTextAtomic } from '../shared/fs-utils.js'
+import { dshSettingsFile } from '../shared/paths.js'
+import { ctxLoggerInfoSafe } from '../shared/log.js'
+
+/**
+ * 从 settings.yaml 文本中移除 llm-pi-ai.providers 下指定 provider 的整块定义。
+ * 纯行级处理：定位 llm-pi-ai: 段 → providers: 子段 → <name>: 块，删除到下一个同级 key 行。
+ */
+export function removeProviderFromSettingsYaml(text, providerName) {
+  const lines = text.split('\n')
+  // 在 "llm-pi-ai:" 段内找 "providers:" 再找 "<name>:"（缩进为 providers 缩进 + 2）
+  let inLlm = false
+  let provIndent = -1
+  let start = -1
+  let keyIndent = -1
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (!inLlm && /^llm-pi-ai:\s*$/.test(line)) { inLlm = true; continue }
+    if (!inLlm) continue
+    const m = line.match(/^(\s*)([A-Za-z0-9_-]+):\s*(.*)$/)
+    if (!m) continue
+    const indent = m[1].length
+    if (provIndent === -1) {
+      if (indent === 2 && m[2] === 'providers' && m[3] === '') { provIndent = 2; continue }
+      if (indent <= 1 && m[2] !== 'providers') break // 离开了 llm-pi-ai 段
+    } else if (start === -1) {
+      if (indent === 4 && m[2] === providerName) { start = i; keyIndent = indent; break }
+      if (indent < 4) break // providers 段结束
+    }
+  }
+  if (start === -1) return text
+  // 块终点：下一个缩进 ≤ keyIndent 的 key 行（或文档结束）
+  const siblingRe = /^(\s*)([A-Za-z0-9_-]+):/
+  let end = lines.length
+  for (let i = start + 1; i < lines.length; i++) {
+    const m = lines[i].match(siblingRe)
+    if (m && m[1].length <= keyIndent) { end = i; break }
+  }
+  lines.splice(start, end - start)
+  return lines.join('\n')
+}
+
+/**
+ * 把 ent-gateway provider 块写进主 settings.yaml 的 llm-pi-ai.providers 下。
+ * 行级操作：已有 ent-gateway 块则先删再插（保持位置在 providers: 之后），没有则直接插入。
+ */
+export function syncMainSettingsProvider(base, models) {
+  // Desktop 多实例场景：每个 profile 有自己的 settings.yaml（cordis.patch.yml 的
+  // settings entry 指向它）。ENT_SETTINGS_PATH 只覆盖 CLI 启动方式；Desktop 启动
+  // 时不带该变量，dshSettingsFile() 会落到 home 根的共享 settings.yaml——而
+  // profile 实际加载的是 patch 指向的文件。这里把所有已知目标都同步一遍，
+  // 保证无论哪种启动方式，生效的 settings.yaml 都拿到最新 provider。
+  const targets = new Set([dshSettingsFile()])
+  for (const patchSettings of profilePatchSettingsPaths()) targets.add(patchSettings)
+  for (const mainSettings of targets) {
+    syncOneMainSettingsProvider(mainSettings, base, models)
+  }
+}
+
+/**
+ * 从当前生效 profile 的 cordis.patch.yml（cordis.yml 的组合结果不可读，patch 源
+ * 文件里 id: settings 的 config.path 就是 profile 级 settings.yaml）解析 settings 路径。
+ * 仅在能唯一确定时返回；解析失败静默跳过（保持旧行为）。
+ */
+export function profilePatchSettingsPaths() {
+  try {
+    const profileDir = process.env.ENT_PROFILE_DIR
+      ?? (process.env.DSH_HOME ? join(process.env.DSH_HOME, 'profiles') : null)
+    if (!profileDir || !existsSync(profileDir)) return []
+    // 多 profile 场景（Desktop 多开/员工多环境）：无法可靠判断当前激活的是哪个 profile
+    //（profile-selection state 在 Desktop userData 目录，插件不可依赖），所以把**所有**
+    // 声明了 settings path 的 profile 配置全量同步——幂等且无副作用，代价可忽略。
+    const out = new Set()
+    for (const name of existsSync(profileDir) ? readdirSync(profileDir) : []) {
+      const patch = join(profileDir, name, 'cordis.patch.yml')
+      if (!existsSync(patch)) continue
+      try {
+        const raw = readFileSync(patch, 'utf8').replace(/^\uFEFF/, '')
+        const m = raw.match(/-\s*id:\s*settings[\s\S]*?path:\s*(.+)/)
+        const p = m?.[1]?.trim()
+        if (p && existsSync(p)) out.add(p)
+      } catch { /* 单个 profile 坏不拖累其他 */ }
+    }
+    return [...out]
+  } catch {
+    return []
+  }
+}
+
+export function syncOneMainSettingsProvider(mainSettings, base, models) {
+  let raw = existsSync(mainSettings) ? readFileSync(mainSettings, 'utf8') : null
+  if (raw === null) {
+    // ENT_SETTINGS_PATH 指向的独立 settings 文件还不存在（新 profile 首次登录）：
+    // 引导创建最小骨架再插入，而不是静默跳过——否则独立配置的实例永远拿不到 provider。
+    // 未设 ENT_SETTINGS_PATH 时保持原行为（共享主配置不存在就让 DSH 自己生成，插件不动）。
+    if (!process.env.ENT_SETTINGS_PATH) return
+    raw = ['llm-pi-ai:', '  providers: {}', 'llm-deepseek:', '  models: []', ''].join('\n')
+    writeTextAtomic(mainSettings, raw)
+    ctxLoggerInfoSafe(`[enterprise] 独立 settings 文件不存在，已引导创建: ${mainSettings}`)
+  }
+  // 已存在则先移除旧块
+  raw = removeProviderFromSettingsYaml(raw, 'ent-gateway')
+  const lines = raw.split('\n')
+  // 找 llm-pi-ai: → providers: 的行号
+  let llmIdx = -1
+  let provIdx = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (llmIdx === -1 && /^llm-pi-ai:\s*$/.test(lines[i])) { llmIdx = i; continue }
+    if (llmIdx !== -1 && provIdx === -1 && /^  providers:\s*$/.test(lines[i])) { provIdx = i; break }
+    // 内联空对象形式（providers: {}）——清空模型后的干净状态，先展开成可插入形式
+    if (llmIdx !== -1 && provIdx === -1 && /^  providers:\s*\{\}\s*$/.test(lines[i])) {
+      lines[i] = '  providers:'
+      provIdx = i
+      break
+    }
+  }
+  if (provIdx === -1) {
+    // 全新员工机的 settings.yaml 往往只有 ui-onboarding 等零散段，根本没有
+    // llm-pi-ai:/providers: 骨架——此前在这里静默 return，导致登录成功但
+    // provider 永远写不进主配置、模型选择器为空（220 实机复现）。这里补建骨架再插入。
+    if (llmIdx === -1) {
+      lines.push('', 'llm-pi-ai:', '  providers:')
+      provIdx = lines.length - 1
+    } else {
+      // 有 llm-pi-ai: 段但缺 providers: 子键——在段头后补 providers:
+      lines.splice(llmIdx + 1, 0, '  providers:')
+      provIdx = llmIdx + 1
+    }
+  }
+  // 构造 provider 块（4 空格缩进起，与现有 provider 块同级）
+  // 模型元数据从网关 /v1/models 透传：input_modes（图片/视频等）、thinking_levels、context/maxTokens
+  const modelLines = models.map((m) => {
+    // input 已在拉取时过滤为 text/image；此处再兜底过滤一次，绝不让 video/audio 落盘
+    const inputs = (Array.isArray(m.input) && m.input.length ? m.input : ['text'])
+      .filter((x) => x === 'text' || x === 'image')
+    const lines = [
+      '        - id: ' + m.id,
+      // DSH 选择器显示名：有网关 displayName 就写 name（yaml 值加引号防特殊字符破坏结构）
+      ...(m.name ? ['          name: ' + JSON.stringify(String(m.name))] : []),
+      '          contextWindow: ' + (m.contextWindow ?? 128000),
+      '          maxTokens: ' + (m.maxTokens ?? 32768),
+      '          input:',
+      ...inputs.map((x) => '            - ' + x),
+    ]
+    // 思考档位：DSH 要求 reasoningEfforts 为 dict（档位→wire 值），不能是 list；
+    // dict 必须含至少一个 off 以外的档位。布尔 false 形式会导致整个 llm-pi-ai 配置段
+    // 被校验拒绝（实测），非思考模型一律省略该字段——缺省即视为非思考模型。
+    // ⚠ 档位 key 白名单：宿主 schema 只接受 off|minimal|low|medium|high|xhigh|max，
+    // 网关侧若给 thinkingLevels 配了其他档位（如 none），原样透传会让整段被拒、
+    // 选择器全空且无显式报错（2026-09-15 实测）——未知档位一律丢弃。
+    if (Array.isArray(m.thinking_levels) && m.thinking_levels.length) {
+      const wire = { off: 'none', minimal: 'minimal', low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' }
+      const beyondOff = m.thinking_levels.filter((lv) => lv !== 'off' && lv in wire)
+      if (beyondOff.length) {
+        lines.push('          reasoningEfforts:')
+        lines.push('            off: none')
+        for (const lv of beyondOff) {
+          lines.push('            ' + lv + ': ' + wire[lv])
+        }
+      }
+    }
+    return lines
+  }).flat()
+  const block = [
+    '    ent-gateway:',
+    '      displayName: 企业统一模型网关',
+    '      apiKeyEnv: ENT_GATEWAY_TOKEN',
+    '      api: openai-completions',
+    '      baseURL: ' + base + '/v1',
+    '      compat:',
+    '        thinkingFormat: openai',
+    '      reasoning: off',
+    '      models:',
+    ...modelLines,
+  ]
+  lines.splice(provIdx + 1, 0, ...block)
+  // 顶层 agent-default-model：不存在时设为网关默认模型（会话开箱即用）；
+  // 已存在时**不覆盖**——用户在 DSH 里手动选过模型（user layer），
+  // 管控默认只在首次配置生效，之后尊重用户选择
+  if (!lines.some((l) => /^agent-default-model:/.test(l))) {
+    lines.push('agent-default-model:', '  provider: ent-gateway', '  model: ' + models[0].id)
+  }
+  // 确保内置官方 deepseek 屏蔽段存在（llm-deepseek 自带整套 v4 模型目录，不屏蔽会绕过企业网关管控）
+  if (!lines.some((l) => /^llm-deepseek:\s*$/.test(l))) {
+    lines.push('llm-deepseek:', '  models: []')
+  }
+  writeTextAtomic(mainSettings, lines.join('\n'))
+}

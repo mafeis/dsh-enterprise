@@ -1,0 +1,6 @@
+# dsh-enterprise bundle patch: 把企业登录插件行插入 profile roster。
+# node 半区（exports "."）跑在 host 进程：注册 /api/enterprise/* 路由，
+# 登录成功后自动写 DSH 的 enterprise-settings.yaml 与 .credentials.yaml。
+- insert:
+    - id: enterprise
+      name: 'dsh-enterprise'

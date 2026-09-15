@@ -1,0 +1,55 @@
+{
+    "name":  "dsh-enterprise",
+    "version":  "0.7.0",
+    "description":  "DSH enterprise client plugin: unified enterprise sign-in, model gateway provisioning and policy governance",
+    "type":  "module",
+    "engines":  {
+                    "node":  "^22.19.0 || \u003e=24.0.0"
+                },
+    "main":  "lib/index.js",
+    "exports":  {
+                    ".":  "./lib/index.js",
+                    "./client":  "./lib/client.js",
+                    "./package.json":  "./package.json"
+                },
+    "scripts":  {
+                    "build":  "node build.mjs",
+                    "test":  "node --test \"test/*.test.mjs\"",
+                    "check":  "node build.mjs \u0026\u0026 node --test \"test/*.test.mjs\""
+                },
+    "dsh":  {
+                "bundle":  {
+                               "patch":  "./cordis.patch.yml"
+                           },
+                "client":  {
+                               "inject":  [
+                                              "slots"
+                                          ],
+                               "platform":  "web"
+                           }
+            },
+    "dshWorkshop":  {
+                        "schema":  "omdsh-workshop-package/v1",
+                        "type":  "plugin",
+                        "integration":  {
+                                            "protocol":  "harness-cordis",
+                                            "artifact":  "cordis.patch.yml"
+                                        },
+                        "install":  {
+                                        "mode":  "guided",
+                                        "adapter":  "third-party",
+                                        "failurePolicy":  "manual",
+                                        "touchesCurrentBeforeActivation":  false
+                                    },
+                        "lifecycle":  {
+                                          "activation":  "hot-reload",
+                                          "dispose":  "supported"
+                                      },
+                        "permissions":  [
+                                            "fs:read",
+                                            "fs:write",
+                                            "net:loopback"
+                                        ]
+                    },
+    "license":  "MIT"
+}
