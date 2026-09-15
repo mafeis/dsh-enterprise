@@ -30,7 +30,7 @@ import { dshHome, dshSettingsFile } from './shared/paths.js'
 import { readJsonSafe } from './shared/fs-utils.js'
 import { setHostLogger, pluginLog, ctxLoggerInfoSafe } from './shared/log.js'
 import { ensurePlaceholderDeepseekKey } from './settings/provider-config.js'
-import { profilePatchSettingsPaths } from './settings/yaml-edit.js'
+import { profilePatchSettingsPaths, ensureWelcomeNoticeAck } from './settings/yaml-edit.js'
 import { repairConfigure } from './auth/login.js'
 import { VERSION } from './shared/version.js'
 
@@ -49,6 +49,8 @@ export function apply(ctx) {
     pluginLog(`插件就绪（版本 ${VERSION}，home=${dshHome()}，gateway=${readState().gateway ?? '未登录'}）`)
     syncHeartbeatTimer(ctx)
     ensurePlaceholderDeepseekKey()
+    // 内测横幅预签必须在激活时（不能等登录）：新装机的横幅在登录遮罩之前就弹
+    ensureWelcomeNoticeAck()
     // 插件管控：启动 4s 后按网关允许清单自动清理清单外插件（manifest 移除，重启后不再加载）。
     // 网关策略未配清单 / 从未登录时内部自动跳过，属空操作。
     setTimeout(() => { void enforcePluginAllowlist('startup').catch(() => { /* 管控失败不影响插件其他功能 */ }) }, 4000)

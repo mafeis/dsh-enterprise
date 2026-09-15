@@ -195,18 +195,45 @@ export function syncOneMainSettingsProvider(mainSettings, base, models) {
   if (!lines.some((l) => /^llm-deepseek:\s*$/.test(l))) {
     lines.push('llm-deepseek:', '  models: []')
   }
-  // 预签内测提示框回执：DSH 首启/每次启动会弹"内测版本提示"横幅（ui-onboarding 命名空间，
-  // 宿主 WELCOME_NOTICE_VERSION 与 settings 里 welcomeNoticeVersion 精确相等即不弹）。
-  // 员工端统一由企业管控预签——新装机不再弹，也不因宿主 bump 版本反复打扰。
-  if (!lines.some((l) => /^ui-onboarding:\s*$/.test(l))) {
-    lines.push('ui-onboarding:', '  welcomeNoticeVersion: 2026-08-13.1')
-  } else {
-    const idx = lines.findIndex((l) => /^ui-onboarding:\s*$/.test(l))
-    const end = lines.findIndex((l, i) => i > idx && /^[^\s]/.test(l))
-    const seg = lines.slice(idx + 1, end === -1 ? lines.length : end)
-    if (!seg.some((l) => /^\s+welcomeNoticeVersion:/.test(l))) {
-      lines.splice(idx + 1, 0, '  welcomeNoticeVersion: 2026-08-13.1')
-    }
-  }
+  ensureWelcomeNoticeSection(lines)
   writeTextAtomic(mainSettings, lines.join('\n'))
+}
+
+/** 宿主 WELCOME_NOTICE_VERSION（内测横幅横幅版本）——settings 里精确相等即不弹。
+ *  宿主 bump 横幅版本时同步改这里。 */
+export const WELCOME_NOTICE_VERSION = '2026-08-13.1'
+
+/** 在 settings 行数组里确保 ui-onboarding.welcomeNoticeVersion 预签（无段补段/有段补键/已签不动） */
+export function ensureWelcomeNoticeSection(lines) {
+  if (!lines.some((l) => /^ui-onboarding:\s*$/.test(l))) {
+    lines.push('ui-onboarding:', `  welcomeNoticeVersion: ${WELCOME_NOTICE_VERSION}`)
+    return
+  }
+  const idx = lines.findIndex((l) => /^ui-onboarding:\s*$/.test(l))
+  const end = lines.findIndex((l, i) => i > idx && /^[^\s]/.test(l))
+  const seg = lines.slice(idx + 1, end === -1 ? lines.length : end)
+  if (!seg.some((l) => /^\s+welcomeNoticeVersion:/.test(l))) {
+    lines.splice(idx + 1, 0, `  welcomeNoticeVersion: ${WELCOME_NOTICE_VERSION}`)
+  }
+}
+
+/** 插件激活即预签内测横幅（不等到登录）——新装机在登录遮罩之前就会弹横幅，
+ *  挂在登录流程里签不住这个时序。对主 settings 与所有 profile patch settings 生效。 */
+export function ensureWelcomeNoticeAck() {
+  const targets = new Set([dshSettingsFile()])
+  for (const p of profilePatchSettingsPaths()) targets.add(p)
+  for (const file of targets) {
+    try {
+      if (!existsSync(file)) continue // 目标尚未生成（全新 profile 未启动完）：登录流程会再签
+      const raw = readFileSync(file, 'utf8')
+      const lines = raw.split('\n')
+      const before = lines.join('\n')
+      ensureWelcomeNoticeSection(lines)
+      const after = lines.join('\n')
+      if (after !== before) {
+        writeTextAtomic(file, after)
+        ctxLoggerInfoSafe(`[enterprise] 已预签内测横幅回执: ${file}`)
+      }
+    } catch { /* 单个目标失败不影响其他 */ }
+  }
 }
