@@ -73,7 +73,7 @@
 						reactJsx.jsx("input", { type: "number", min: 15, max: 3600, value: interval, disabled: busy !== "", onChange: (e) => setIntervalSec(Number(e.target.value)), style: { width: 64, border: "1px solid #e6eaf1", borderRadius: 6, padding: "3px 8px", fontFamily: "inherit" } }),
 						reactJsx.jsx("span", { style: UI.dim, children: "秒" }),
 						reactJsx.jsx("button", { style: UI.btn, disabled: busy !== "", onClick: () => act("hbsave", () => apiPost("/api/enterprise/heartbeat-config", { enabled: status.heartbeatConfig?.enabled !== false, intervalSec: interval }), "✓ 间隔已保存"), children: "保存" }),
-						reactJsx.jsx("button", { style: UI.btn, disabled: busy !== "", onClick: () => act("hbnow", () => apiPost("/api/enterprise/heartbeat-now"), "✓ 心跳已发送"), children: busy === "hbnow" ? "发送中…" : "立即检测" })
+						reactJsx.jsx("button", { style: UI.btn, disabled: busy !== "", onClick: () => act("hbnow", () => apiPost("/api/enterprise/heartbeat-now").then((r) => { window.__enterpriseCheckOverlay?.(); return r; }), "✓ 心跳已发送"), children: busy === "hbnow" ? "发送中…" : "立即检测" })
 					] })
 				] }),
 
@@ -94,7 +94,7 @@
 				] }),
 
 				showRelogin && reactJsx.jsxs("div", { style: { border: "1px solid #e6eaf1", borderRadius: 10, padding: "14px 16px", margin: "8px 0", background: "#fbfcfe" }, children: [
-					reactJsx.jsx("input", { placeholder: "网关地址（默认上次使用，出厂地址见企业部署文档）", value: server, onChange: (e) => setServer(e.target.value), style: UI.input }),
+					reactJsx.jsx("input", { placeholder: "网关地址", value: server, onChange: (e) => setServer(e.target.value), style: UI.input }),
 					reactJsx.jsx("input", { placeholder: "账号", value: user, onChange: (e) => setUser(e.target.value), style: UI.input }),
 					reactJsx.jsx("input", { placeholder: "密码", type: "password", value: pass, onChange: (e) => setPass(e.target.value), style: UI.input }),
 					reactJsx.jsx("button", { style: Object.assign({}, UI.btn, UI.btnPrimary, { width: "100%" }), disabled: busy !== "", onClick: () => act("relogin", () => apiPost("/api/enterprise/login", { server: server.trim() || undefined, username: user.trim(), password: pass }).then((r) => { if (r.ok) { setShowRelogin(false); setPass(""); } return r; }), "✓ 登录成功，配置已更新"), children: busy === "relogin" ? "登录中…" : "登录并自动配置" })

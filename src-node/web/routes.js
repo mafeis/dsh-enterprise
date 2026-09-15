@@ -235,6 +235,7 @@ export function createRoutes(ctx) {
         json(200, {
           configured: !!p,
           gateway: p?.baseUrl ?? state.gateway ?? '',
+          lastGateway: state.gateway ?? '',
           models: (p?.models ?? state.models ?? []).map((m) => (typeof m === 'string' ? m : m.id)),
           defaultModel: s?.['agent-default-model']?.model ?? '',
           user: state.user ?? '',

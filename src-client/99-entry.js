@@ -19,18 +19,24 @@
 				})();
 
 				// 登录遮罩热挂载：账号被网关停用/凭证被吊销时，插件心跳自动清场（configured 变 false），
-				// 这里轮询发现后立即弹出全屏登录遮罩锁定操作——员工端最迟约 1 分钟回到登录页，无需重启
-				const overlayWatch = setInterval(async () => {
+				// 这里轮询发现后立即弹出全屏登录遮罩锁定操作。5s 轮询（原 30s：清场后遮罩要等很久才弹，
+				// 手动点"立即检测"看到未登录提示后迟迟不弹框）。已挂出则跳过，开销可忽略。
+				const overlayWatch = setInterval(async () => { void checkOverlay(); }, 5000);
+				cleanups.push(() => clearInterval(overlayWatch));
+				// 供其他模块在关键动作（立即检测/登出）后立即触发遮罩检查，不等下一轮轮询
+				window.__enterpriseCheckOverlay = checkOverlay;
+				cleanups.push(() => { delete window.__enterpriseCheckOverlay; });
+
+				async function checkOverlay() {
 					if (disposed) return;
 					if (document.getElementById("enterprise-overlay")) return;
 					try {
 						const r = await fetch("/api/enterprise/status", { headers: { accept: "application/json" } });
 						if (!r.ok) return;
 						const s = await r.json();
-						if (!disposed && s && !s.configured) mountLoginOverlay();
+						if (!disposed && s && !s.configured) void mountLoginOverlay();
 					} catch { /* 网络抖动：下轮再看 */ }
-				}, 30000);
-				cleanups.push(() => clearInterval(overlayWatch));
+				}
 
 				// 注册设置面板：设置 → 企业管理（一级菜单，页内二级 tab：账号管理/插件管理/规则管理）
 				try {

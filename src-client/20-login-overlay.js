@@ -1,6 +1,15 @@
 		/* ============ 全屏登录遮罩（未配置时自动弹出） ============ */
 
-		function mountLoginOverlay() {
+		async function mountLoginOverlay() {
+			// 预填上次登录的网关地址（state.gateway 登出/清场后保留）：重登零输入
+			let lastGateway = "";
+			try {
+				const r = await fetch("/api/enterprise/status", { headers: { accept: "application/json" } });
+				if (r.ok) {
+					const s = await r.json();
+					lastGateway = (s && (s.gateway || s.lastGateway)) || "";
+				}
+			} catch {}
 			const overlay = document.createElement("div");
 			overlay.id = "enterprise-overlay";
 			overlay.innerHTML = `
@@ -25,7 +34,7 @@
   <h2>企业账号登录</h2>
   <div class="sub">登录后自动配置企业模型网关，无需手工设置</div>
   <div class="err" id="enterprise-err"></div>
-  <input id="enterprise-server" placeholder="网关地址（默认上次使用，出厂地址见企业部署文档）">
+  <input id="enterprise-server" placeholder="网关地址" value="${lastGateway.replace(/"/g, "&quot;")}">
   <input id="enterprise-user" placeholder="账号" autocomplete="username">
   <input id="enterprise-pass" placeholder="密码" type="password" autocomplete="currenterprise-password">
   <button id="enterprise-btn">登录并自动配置</button>
