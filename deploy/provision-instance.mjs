@@ -100,7 +100,22 @@ let done = []
     }
     if (changed) { writeFileSync(file, t); done.push('settings 预签（横幅回执 + 增强模式）') }
     else done.push('settings 预签（已齐，跳过）')
-  } else done.push('settings 预签（文件未生成，登录时插件会写）')
+  } else {
+    // settings.yaml 尚未生成（宿主首次启动才有骨架）：预建最小骨架。
+    // 不预建的话宿主本次启动读不到回执 → 内测横幅在登录前弹一次（ent5 实测）。
+    // 骨架含 llm-deepseek 屏蔽段；登录时 syncOneMainSettingsProvider 走"已存在"分支正常插入 provider。
+    const skeleton = [
+      'ui-onboarding:',
+      '  welcomeNoticeVersion: ' + WELCOME_NOTICE_VERSION,
+      'dsh-desktop:',
+      '  mode: advanced',
+      'llm-deepseek:',
+      '  models: []',
+      '',
+    ].join('\n')
+    writeFileSync(file, skeleton)
+    done.push('settings 预建骨架（横幅回执 + 增强模式 + deepseek 屏蔽）')
+  }
 }
 
 console.log('预置完成:')
