@@ -82,7 +82,16 @@ fs.writeFileSync(p + '/package.json', JSON.stringify({
 }, null, 2))
 fs.writeFileSync(p + '/cordis.patch.yml', '# desktop profile: settings 指向本 profile 自身' + String.fromCharCode(10) + '- id: settings' + String.fromCharCode(10) + '  config:' + String.fromCharCode(10) + '    path: ' + p.replace(/\//g, '\\') + String.fromCharCode(92) + 'settings.yaml' + String.fromCharCode(10))
 " $profileDir
-Push-Location $profileDir; pnpm install --offline 2>&1 | Select-Object -Last 1; Pop-Location
+Push-Location $profileDir
+# pnpm 冷安装三件套（ent10 实测定型）：
+#   CI=true        非 TTY 下允许清摆 node_modules（否则 ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY）
+#   --no-frozen-lockfile  首装无锁或锁不匹配时不拦
+#   实体包先就位   file: 依赖指向的目录必须先存在
+$env:CI = "true"
+pnpm install --offline --no-frozen-lockfile 2>&1 | Select-Object -Last 1
+Remove-Item Env:CI -ErrorAction SilentlyContinue
+if (-not (Test-Path "$profileDir\node_modules\dsh-enterprise")) { throw "dsh-enterprise 物化失败" }
+Pop-Location
 Write-Host "   dsh-enterprise@$ver 已装"
 
 Write-Host "== 3/4 预置首启状态（向导回执/模式首选项/默认工作区/网关预填/settings）==" -ForegroundColor Cyan
