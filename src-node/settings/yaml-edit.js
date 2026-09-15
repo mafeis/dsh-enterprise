@@ -195,5 +195,18 @@ export function syncOneMainSettingsProvider(mainSettings, base, models) {
   if (!lines.some((l) => /^llm-deepseek:\s*$/.test(l))) {
     lines.push('llm-deepseek:', '  models: []')
   }
+  // 预签内测提示框回执：DSH 首启/每次启动会弹"内测版本提示"横幅（ui-onboarding 命名空间，
+  // 宿主 WELCOME_NOTICE_VERSION 与 settings 里 welcomeNoticeVersion 精确相等即不弹）。
+  // 员工端统一由企业管控预签——新装机不再弹，也不因宿主 bump 版本反复打扰。
+  if (!lines.some((l) => /^ui-onboarding:\s*$/.test(l))) {
+    lines.push('ui-onboarding:', '  welcomeNoticeVersion: 2026-08-13.1')
+  } else {
+    const idx = lines.findIndex((l) => /^ui-onboarding:\s*$/.test(l))
+    const end = lines.findIndex((l, i) => i > idx && /^[^\s]/.test(l))
+    const seg = lines.slice(idx + 1, end === -1 ? lines.length : end)
+    if (!seg.some((l) => /^\s+welcomeNoticeVersion:/.test(l))) {
+      lines.splice(idx + 1, 0, '  welcomeNoticeVersion: 2026-08-13.1')
+    }
+  }
   writeTextAtomic(mainSettings, lines.join('\n'))
 }

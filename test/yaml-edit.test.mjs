@@ -115,6 +115,31 @@ test('syncOneMainSettingsProvider：已有 agent-default-model 时不覆盖用�
   assert.ok(text.includes('model: user-choice'))
 })
 
+test('syncOneMainSettingsProvider：内测提示框预签（无 ui-onboarding 补齐；已有段无 ack 键补键；已签不动）', () => {
+  // 1. 全新骨架：应补 ui-onboarding + welcomeNoticeVersion
+  const t1 = join(sandbox, 'settings-notice-new.yaml')
+  writeFileSync(t1, 'llm-pi-ai:\n  providers: {}\n', 'utf8')
+  syncOneMainSettingsProvider(t1, 'http://gw:8900', MODELS)
+  const s1 = readFileSync(t1, 'utf8')
+  assert.ok(/^ui-onboarding:\s*$/m.test(s1))
+  assert.ok(/^\s+welcomeNoticeVersion: 2026-08-13\.1$/m.test(s1))
+
+  // 2. 已有 ui-onboarding 段但缺 ack 键：只补键，不动段内其他内容
+  const t2 = join(sandbox, 'settings-notice-partial.yaml')
+  writeFileSync(t2, 'ui-onboarding:\n  otherKey: keep-me\nllm-pi-ai:\n  providers: {}\n', 'utf8')
+  syncOneMainSettingsProvider(t2, 'http://gw:8900', MODELS)
+  const s2 = readFileSync(t2, 'utf8')
+  assert.ok(/^\s+welcomeNoticeVersion: 2026-08-13\.1$/m.test(s2))
+  assert.ok(s2.includes('otherKey: keep-me'))
+
+  // 3. 已签过：幂等，不重复插入
+  const t3 = join(sandbox, 'settings-notice-acked.yaml')
+  writeFileSync(t3, 'ui-onboarding:\n  welcomeNoticeVersion: 2026-08-13.1\nllm-pi-ai:\n  providers: {}\n', 'utf8')
+  syncOneMainSettingsProvider(t3, 'http://gw:8900', MODELS)
+  const s3 = readFileSync(t3, 'utf8')
+  assert.equal((s3.match(/welcomeNoticeVersion:/g) ?? []).length, 1)
+})
+
 test('profilePatchSettingsPaths：DSH_HOME 未设置时返回空数组', () => {
   const saved = process.env.DSH_HOME
   delete process.env.DSH_HOME
