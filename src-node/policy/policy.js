@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { readState, readToken } from '../state/state.js'
 import { dshHome } from '../shared/paths.js'
+import { pluginLog } from '../shared/log.js'
 
 /** 策略缓存：allowedPlugins / pluginRegistry / clientRules 从网关 /policy/current 拉取，60s 缓存 */
 const policyCache = { at: 0, policy: null, ackedVersion: '' }
