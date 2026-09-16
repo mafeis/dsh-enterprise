@@ -102,6 +102,14 @@ export function createRoutes(ctx) {
           if (spec.registry) args.push('--registry', spec.registry)
           const r = await runPluginCli(args)
           noteRuleRun('plugin-install', r.ok)
+          // dsh 失败时只回一行 "pnpm failed in profile directory" 包装文案；把高频根因翻译成人话
+          if (!r.ok && r.error) {
+            const t = String(r.error)
+            const linked = t.match(/Could not install from "([^"]+)"/)
+            if (/ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND/.test(t) || (/ENOENT/.test(t) && linked)) {
+              r.error = `profile 依赖里的 file: 链接失效（目录不存在：${linked?.[1] ?? '?'}），请管理员修复后重试`
+            }
+          }
           // 安装后校验：dsh CLI 可能「部分成功」（bundles 写入 manifest 但 pnpm 落盘失败——
           // 网络/registry 抖动时出现过），此时依赖实体缺失、重启后 bundle 解析直接报
           // PackageOverlayNotFoundError。这里核实 node_modules 实体真实存在，不实就改报失败。
