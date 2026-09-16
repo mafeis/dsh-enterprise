@@ -10,3 +10,4 @@ lib/
 # 部署与安装脚本（不入库）
 deploy/
 install/
+*.tgz
