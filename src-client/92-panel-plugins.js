@@ -11,6 +11,9 @@
 			"market.install": { zh: "安装", en: "Install" },
 			"market.installing": { zh: "安装中…", en: "Installing…" },
 			"market.installed": { zh: "已安装", en: "Installed" },
+			"market.uninstall": { zh: "卸载", en: "Uninstall" },
+			"market.uninstalling": { zh: "卸载中…", en: "Uninstalling…" },
+			"market.uninstallOk": { zh: "已卸载 · 重启 DSH 后完全退出", en: "Uninstalled · restart DSH to fully unload" },
 			"market.noDesc": { zh: "（无描述）", en: "(no description)" },
 			"market.localInstalled": { zh: "本机已安装", en: "Installed on this machine" },
 			"market.noneInstalled": { zh: "无", en: "None" },
@@ -30,6 +33,7 @@
 			const [installName, setInstallName] = react.useState("");
 			const [installMsg, setInstallMsg] = react.useState("");
 			const [installing, setInstalling] = react.useState("");
+			const [uninstalling, setUninstalling] = react.useState("");
 			react.useEffect(() => {
 				let alive = true;
 				apiGet("/api/enterprise/market").then((r) => { if (alive) setMarket(r); }).catch(() => { if (alive) setMarket({ ok: false, items: [] }); });
@@ -59,6 +63,18 @@
 				setInstalling("");
 			};
 
+			const doUninstall = async (name) => {
+				setUninstalling(name); setInstallMsg("");
+				try {
+					const res = await apiPost("/api/enterprise/plugin-remove", { name });
+					if (res.ok) {
+						setInstallMsg("✓ " + name + "：" + t("market.uninstallOk"));
+						statusStoreRefresh();
+					} else setInstallMsg("✗ " + name + "：" + (res.error || "uninstall failed"));
+				} catch (e) { setInstallMsg("✗ " + name + "：" + (e && e.message ? e.message : e)); }
+				setUninstalling("");
+			};
+
 			const items = market?.items;
 			// 允许清单为空 = 不限装 → 保留手输安装入口
 			const unrestricted = Array.isArray(items) && market.ok === true && items.length === 0 && !g.allowedUnknown;
@@ -86,8 +102,8 @@
 										: reactJsx.jsx("div", { style: Object.assign({}, UI.dim, { flex: 1 }), children: t("market.noDesc") });
 								})(),
 								it.installed
-									? null
-									: reactJsx.jsx("button", { style: Object.assign({}, UI.btn, UI.btnPrimary, { width: "100%" }), disabled: installing !== "", onClick: () => doInstall(it.name), children: installing === it.name ? t("market.installing") : t("market.install") })
+								? reactJsx.jsx("button", { style: Object.assign({}, UI.btn, { width: "100%" }), disabled: uninstalling !== "" || installing !== "", onClick: () => doUninstall(it.name), children: uninstalling === it.name ? t("market.uninstalling") : t("market.uninstall") })
+								: reactJsx.jsx("button", { style: Object.assign({}, UI.btn, UI.btnPrimary, { width: "100%" }), disabled: installing !== "" || uninstalling !== "", onClick: () => doInstall(it.name), children: installing === it.name ? t("market.installing") : t("market.install") })
 							] }, it.name)),
 							unrestricted ? reactJsx.jsxs("div", { style: Object.assign({}, UI.card, { margin: 0 }), children: [
 								reactJsx.jsx("div", { style: UI.cardTitle, children: t("market.other") }),

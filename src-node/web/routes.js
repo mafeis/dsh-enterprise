@@ -11,6 +11,7 @@
  *   GET  /api/enterprise/usage?days=       我的消耗（透传网关计费）
  *   GET  /api/enterprise/market            企业插件市场
  *   POST /api/enterprise/plugin-install    安装企业允许清单内的插件（事前拦截）
+ *   POST /api/enterprise/plugin-remove     卸载本机插件（保护名单/清单外拒绝）
  *   GET  /api/enterprise/plugin-registry   企业插件源配置
  *   GET  /api/enterprise/rules             本机执行规则（总量统计 + 命中记录）
  *   POST /api/enterprise/rules/check-url   试一试：网址是否被拦
@@ -64,13 +65,14 @@ export function createRoutes(ctx) {
         const policy = await fetchPolicySnapshot()
         const allowed = Array.isArray(policy?.allowedPlugins) ? policy.allowedPlugins : []
         const installed = collectInstalledPlugins() ?? []
-        // 元数据：管理员中文名录优先，npm description 兜底（10 分钟缓存）
-        const meta = await marketMeta(allowed)
+        // 描述优先级：策略下发的插件仓库描述（管理员在网关维护，中英皆可）→ 内置名录 → npm 兜底
+        const meta = policy?.pluginMeta ?? {}
+        const npmDesc = await marketMeta(allowed.filter((n) => !(meta[n]?.description) && !MARKET_DESC_ZH[n]))
         const items = allowed.map((name) => ({
           name,
           installed: installed.includes(name),
-          descriptionZh: MARKET_DESC_ZH[name] ?? '',
-          description: MARKET_DESC_ZH[name] ?? (meta[name] ?? ''),
+          descriptionZh: meta[name]?.description || MARKET_DESC_ZH[name] || '',
+          description: meta[name]?.description || MARKET_DESC_ZH[name] || (npmDesc[name] ?? ''),
         }))
         json(200, { ok: true, items, installedOthers: installed.filter((x) => !allowed.includes(x)) })
       },
@@ -136,6 +138,58 @@ export function createRoutes(ctx) {
             }
           }
           return json(200, { ...r, ok: verified, verified, resolvedSpec: spec.spec, source: spec.source, registry: spec.registry ?? null })
+        } finally {
+          releaseManifestOp()
+        }
+      },
+    },
+    {
+      kind: 'exact',
+      path: '/api/enterprise/plugin-remove',
+      methods: ['POST'],
+      jsonBody: true,
+      handler: async ({ res, body }) => {
+        const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)) }
+        const policy = await fetchPolicySnapshot()
+        const allowed = Array.isArray(policy?.allowedPlugins) ? policy.allowedPlugins : null
+        const name = String(body?.name ?? '').trim()
+        if (!name) return json(400, { ok: false, error: '需要 name（插件包名）' })
+        // 保护名单（本插件/DSH 必装组件）不可卸载
+        if (PROTECTED_PLUGINS.includes(name)) return json(403, { ok: false, error: `「${name}」是企业必装组件，不可卸载` })
+        // 与安装同口径：清单非空时仅清单内可卸载（清单外插件由管控自动清理，不走这里）
+        if (allowed && allowed.length && !allowed.includes(name)) {
+          return json(403, { ok: false, error: `插件「${name}」不在企业允许清单内，请通过管理员处理` })
+        }
+        if (isEnforceBusy() || !claimManifestOp()) {
+          return json(409, { ok: false, error: '插件管控清理正在进行，请稍后重试卸载' })
+        }
+        try {
+          const installed = collectInstalledPlugins() ?? []
+          if (!installed.includes(name)) return json(400, { ok: false, error: `「${name}」未在本机安装` })
+          const r = await runPluginCli(['remove', name])
+          noteRuleRun('plugin-remove', r.ok)
+          if (!r.ok && r.error) {
+            const t = String(r.error)
+            if (/not installed|isn't installed/i.test(t)) {
+              r.ok = true; r.output = r.output || 'not installed'   // 已不在 → 视为成功（幂等）
+            }
+          }
+          // manifest 复核：pnpm 偶发用旧快照把条目写回（与清理对账同款自愈）
+          if (r.ok) {
+            const profileDir = findProfileRoot()
+            if (profileDir) {
+              try {
+                const pkgPath = join(profileDir, 'package.json')
+                const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+                if (Array.isArray(pkg?.dsh?.profile?.bundles) && pkg.dsh.profile.bundles.includes(name)) {
+                  pkg.dsh.profile.bundles = pkg.dsh.profile.bundles.filter((b) => b !== name)
+                  delete pkg.dependencies?.[name]
+                  writeTextAtomic(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
+                }
+              } catch { /* 复核失败不影响主结果 */ }
+            }
+          }
+          return json(200, { ...r, removed: r.ok, name })
         } finally {
           releaseManifestOp()
         }
