@@ -53,14 +53,6 @@
 							reactJsx.jsx("span", { style: UI.label, children: "在线心跳" }),
 							node
 						] });
-					})(),
-					(() => {
-						const pv = (status.heartbeat && status.heartbeat.pluginViolations) || [];
-						if (!pv.length) return null;
-						return reactJsx.jsxs("div", { style: Object.assign({}, UI.row, { alignItems: "flex-start" }), children: [
-							reactJsx.jsx("span", { style: UI.label, children: "插件合规" }),
-							UI.dot("#d97706", reactJsx.jsx("span", { style: { color: "#b45309" }, children: pv.length + " 个清单外插件（详见插件管理）" }))
-						] });
 					})()
 				] }),
 

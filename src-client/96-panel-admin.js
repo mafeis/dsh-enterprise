@@ -21,7 +21,6 @@
 				{ id: "policy", label: "规则管理", comp: EntPolicyPanel },
 			];
 			const Active = tabs.find((t) => t.id === tab)?.comp || AccountPanel;
-			const violations = status?.pluginGovernance?.violations || [];
 			const tabBtns = tabs.map((t) => {
 				const active = tab === t.id;
 				return reactJsx.jsx("button", {
@@ -42,10 +41,6 @@
 				});
 			});
 			return reactJsx.jsxs("div", { children: [
-				// 全局违规告警：不依赖用户切到「插件管理」就能看到
-				violations.length > 0 && tab !== "plugins" ? UI.alertBar(
-					"插件管控：检测到 " + violations.length + " 个允许清单之外的插件（" + violations.join("、") + "），已上报管理台。"
-				) : null,
 				reactJsx.jsx("div", { style: { display: "flex", gap: 2, borderBottom: "1px solid #e6eaf1", margin: "0 0 14px", flexWrap: "wrap" }, children: tabBtns }),
 				reactJsx.jsx(Active, {})
 			] });
