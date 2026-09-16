@@ -24,7 +24,7 @@ import { writeTextAtomic, readJsonSafe } from '../shared/fs-utils.js'
 import { entSettingsFile } from '../shared/paths.js'
 import { pluginLog } from '../shared/log.js'
 import { readState, saveState, readToken } from '../state/state.js'
-import { collectInstalledPlugins } from '../device/device-info.js'
+import { collectInstalledPlugins, collectDeviceInfo } from '../device/device-info.js'
 import { fetchPolicySnapshot, resolvePluginInstallSpec, runPluginCli, findProfileRoot, MARKET_DESC_ZH, marketMeta, peekCachedPolicy } from '../policy/policy.js'
 import { PROTECTED_PLUGINS, isEnforceBusy, claimManifestOp, releaseManifestOp } from '../enforce/plugin-enforce.js'
 import { RULE_ENGINE_VERSION, runTextRules, runUrlRules, noteRuleRun, getRuleRuns, getRuleHits, isStepHookAlive, ruleHost } from '../rules/engine.js'
@@ -241,6 +241,7 @@ export function createRoutes(ctx) {
           models: (p?.models ?? state.models ?? []).map((m) => (typeof m === 'string' ? m : m.id)),
           defaultModel: s?.['agent-default-model']?.model ?? '',
           user: state.user ?? '',
+          hostname: (await collectDeviceInfo())?.hostname ?? '',
           loginAt: state.loginAt ?? '',
           heartbeatConfig: state.heartbeatConfig ?? { enabled: true, intervalSec: 60 },
           heartbeat: state.heartbeat ?? currentHeartbeatState(),
