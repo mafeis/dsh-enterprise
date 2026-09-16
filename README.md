@@ -49,26 +49,27 @@
 | 依赖 | 版本 / 说明 |
 | --- | --- |
 | DSH Desktop | 任意支持插件的版本 |
-| Node.js | `^22.19.0` 或 `>=24.0.0`（构建与测试用） |
+| Node.js | 仅从源码构建时需要 `^22.19.0` / `>=24.0.0`；npm 安装无需单独准备 |
 | npm 依赖 | **零依赖** — 构建脚本与运行时都不装任何包 |
 | 插件权限 | `fs:read` / `fs:write` / `net:loopback`（仅访问本机回环地址） |
 
 ### 安装
 
-```powershell
-# 1. 构建
-node build.mjs
+一条命令，从 npm 安装（推荐）：
 
-# 2. 安装到 DSH 终端
-dsh plugin add file:./
+```powershell
+dsh plugin add dsh-enterprise
 ```
 
 装好后打开 DSH 终端，登录页在 `/plugins/enterprise`——员工输入企业账号密码即可，不需要手动填任何地址或密钥。
 
-### 开发
+### 从源码构建（开发者）
 
 ```powershell
+git clone https://github.com/mafeis/dsh-enterprise.git
+cd dsh-enterprise
 node build.mjs                        # 构建 → lib/
+dsh plugin add file:./
 node --test "test/*.test.mjs"         # 单元测试
 node test/test-enforce.mjs            # 插件管控端到端冒烟
 ```
@@ -104,26 +105,27 @@ Install this plugin into the employee's DSH terminal and all of it just works:
 | Dependency | Version / Notes |
 | --- | --- |
 | DSH Desktop | Any version that supports plugins |
-| Node.js | `^22.19.0` or `>=24.0.0` (for build & tests) |
+| Node.js | Only needed when building from source: `^22.19.0` / `>=24.0.0`; the npm install needs no extra setup |
 | npm packages | **Zero dependencies** — neither build script nor runtime installs anything |
 | Plugin permissions | `fs:read` / `fs:write` / `net:loopback` (loopback only) |
 
 ### Installation
 
-```powershell
-# 1. Build
-node build.mjs
+One command, from npm (recommended):
 
-# 2. Install into the DSH terminal
-dsh plugin add file:./
+```powershell
+dsh plugin add dsh-enterprise
 ```
 
 Once installed, open the DSH terminal and go to `/plugins/enterprise` — employees just enter their enterprise account and password; no endpoint or key to fill in by hand.
 
-### Development
+### Build from source (developers)
 
 ```powershell
+git clone https://github.com/mafeis/dsh-enterprise.git
+cd dsh-enterprise
 node build.mjs                        # Build → lib/
+dsh plugin add file:./
 node --test "test/*.test.mjs"         # Unit tests
 node test/test-enforce.mjs            # End-to-end smoke test
 ```
