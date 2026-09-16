@@ -146,6 +146,7 @@ export async function runPluginCli(args) {
   // DSH_HOME 钉回本进程 home——防任何中间层再写坏。
   const env = { ...process.env, DSH_HOME: dshHome(), ELECTRON_RUN_AS_NODE: '1' }
   const cliArgs = [boot.entry, 'plugin', '--profile', profileName, ...args]
+  pluginLog(`[enterprise] plugin CLI: exe=${boot.exe} home=${env.DSH_HOME} args=${args.join(' ')}`)
   return new Promise((resolve) => {
     execFile(boot.exe, cliArgs,
       { cwd: profileDir, timeout: 120000, windowsHide: true, env },

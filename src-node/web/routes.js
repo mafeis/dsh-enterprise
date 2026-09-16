@@ -104,6 +104,7 @@ export function createRoutes(ctx) {
           if (spec.registry) args.push('--registry', spec.registry)
           const r = await runPluginCli(args)
           noteRuleRun('plugin-install', r.ok)
+          if (!r.ok) pluginLog(`[enterprise] plugin-install ${name} 失败原始错误: ${String(r.error ?? '').slice(0, 300)}`)
           // dsh 失败时只回一行 "pnpm failed in profile directory" 包装文案；把高频根因翻译成人话
           if (!r.ok && r.error) {
             const t = String(r.error)
