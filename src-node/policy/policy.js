@@ -3,9 +3,11 @@
  * 另含企业自建插件源解析（pluginRegistry）、profile 定位、dsh plugin CLI 转发、
  * 市场元数据（管理员中文名录优先，npm description 兜底）。
  */
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { homedir } from 'node:os'
 import { readState, readToken } from '../state/state.js'
+import { dshHome } from '../shared/paths.js'
 
 /** 策略缓存：allowedPlugins / pluginRegistry / clientRules 从网关 /policy/current 拉取，60s 缓存 */
 const policyCache = { at: 0, policy: null, ackedVersion: '' }
@@ -90,17 +92,63 @@ export function findProfileRoot() {
   return null
 }
 
+/** 定位宿主 desktop-cli 入口 + 引导宿主 exe（返回 { exe, entry } 或 null）。
+ *  宿主进程内 process.execPath = DSH Desktop.exe，一级命中（entry 相对 exe 固定）；
+ *  测试进程（纯 node）退化为扫 host-commands shim 反解宿主 exe 与 cli 入口。
+ *  cli 入口在 app.asar 内部，Node 的 existsSync 看不见——只验 asar 包本体（Electron fs 才穿透 asar）。 */
+function desktopCliBootstrap() {
+  try {
+    const exe = process.execPath
+    if (/DSH Desktop\.exe$/i.test(exe) || existsSync(join(dirname(exe), 'resources', 'app.asar'))) {
+      return { exe, entry: join(dirname(exe), 'resources', 'app.asar', 'lib', 'desktop-cli.js') }
+    }
+  } catch { /* ignore */ }
+  try {
+    const shimRoots = [
+      join(homedir(), '.dsh-desktop-ent2', 'host-commands'),           // 已知重定向实例（保底）
+      join(homedir(), 'AppData', 'Roaming', 'DSH Desktop', 'host-commands'),
+    ]
+    for (const root of shimRoots) {
+      let kinds
+      try { kinds = readdirSync(root) } catch { continue }
+      for (const kind of kinds) {
+        const genDir = join(root, kind, 'generations')
+        let gens
+        try { gens = readdirSync(genDir) } catch { continue }
+        for (const g of gens) {
+          const shim = join(genDir, g, 'bin', 'dsh.cmd')
+          try {
+            const text = readFileSync(shim, 'utf8')
+            const m = text.match(/"([^"]+DSH Desktop\.exe)"[^"]*"([^"]+desktop-cli\.js)"/)
+            if (m && existsSync(m[1])) return { exe: m[1], entry: m[2] }
+          } catch { /* 下一个 */ }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
 /** 在 profile 目录执行 dsh plugin add/remove（转发 pnpm）。返回 { ok, output|error }
  *  profile 名取自 profile 目录名（曾写死 'default'，装到其他 profile 会错位）。
- *  Windows 下 dsh.cmd 必须 shell:true（Node 20+ 对 .cmd 无 shell spawn 直接 EINVAL）。 */
+ *  不走 PATH 上的 dsh：host-commands shim 写死 set DSH_HOME=<默认 home> 且无条件覆盖
+ *  外部环境（用户目录重定向如 .dsh-ent2 会被劫持 → 装错家 → "pnpm failed"）。
+ *  改为直调宿主 desktop-cli（ELECTRON_RUN_AS_NODE + app.asar 入口），DSH_HOME 钉回
+ *  本进程真实 home —— 与宿主同源，天然存在，不依赖任何 PATH 配置。 */
 export async function runPluginCli(args) {
   const profileDir = findProfileRoot()
   if (!profileDir) return { ok: false, error: '无法定位 profile 目录（非 profile 安装形态不支持本操作）' }
   const profileName = profileDir.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'default'
   const { execFile } = await import('node:child_process')
+  const boot = desktopCliBootstrap()
+  if (!boot) return { ok: false, error: '未找到宿主 DSH Desktop（无法执行插件安装/卸载）' }
+  // ELECTRON_RUN_AS_NODE=1 让 DSH Desktop.exe 当纯 Node 跑 desktop-cli.js（与 host-commands shim 同一机制）；
+  // DSH_HOME 钉回本进程 home——防任何中间层再写坏。
+  const env = { ...process.env, DSH_HOME: dshHome(), ELECTRON_RUN_AS_NODE: '1' }
+  const cliArgs = [boot.entry, 'plugin', '--profile', profileName, ...args]
   return new Promise((resolve) => {
-    execFile('dsh', ['plugin', '--profile', profileName, ...args],
-      { cwd: profileDir, timeout: 120000, windowsHide: true, shell: process.platform === 'win32' },
+    execFile(boot.exe, cliArgs,
+      { cwd: profileDir, timeout: 120000, windowsHide: true, env },
       (err, stdout, stderr) => {
         if (err) resolve({ ok: false, error: String(stderr || err.message).slice(0, 400) })
         else resolve({ ok: true, output: String(stdout || '').slice(-1500) })
