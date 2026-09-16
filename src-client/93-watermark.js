@@ -61,6 +61,8 @@
 			if (__entWatermark.el) return;
 			__entWatermark.el = entWatermarkBuild();
 			document.body.appendChild(__entWatermark.el);
+			// 定时器/观察器只建一次：mount 会被重建路径反复调用，重复建会泄漏堆叠拖死页面
+			if (__entWatermark.mo) return;
 			// 防删守护：水印层被移除或 style 被清 → 重建（员工无法靠控制台一键去水印）
 			__entWatermark.mo = new MutationObserver(() => {
 				if (!__entWatermark.on) return;
@@ -80,6 +82,7 @@
 
 		function entWatermarkUnmount() {
 			__entWatermark.on = false;
+			__entWatermark.fp = null;
 			__entWatermark.el?.remove();
 			__entWatermark.el = null;
 			__entWatermark.mo?.disconnect();
@@ -97,8 +100,10 @@
 					const d = await r.json();
 					const p = d.policy ?? d;
 					const on = !!p?.watermark;
+					const fp = JSON.stringify(p?.watermarkStyle ?? null);
 					__entWatermark.style = p?.watermarkStyle ?? null;
 					if (on && !__entWatermark.on) {
+						__entWatermark.fp = fp;
 						// 顺带拿登录账号/设备名（拿不到用兜底文案）
 						try {
 							const s = await (await fetch("/api/enterprise/status", { headers: { accept: "application/json" } })).json();
@@ -110,7 +115,9 @@
 						__entWatermark.on = true;
 						entWatermarkMount();
 					} else if (on && __entWatermark.on) {
-						// 样式热更：重建水印层
+						// 样式热更：指纹没变不动（否则每 10s 重建一次纯浪费）
+						if (fp === __entWatermark.fp) return;
+						__entWatermark.fp = fp;
 						const old = document.querySelector('[data-enterprise-watermark="1"]');
 						if (old) old.remove();
 						__entWatermark.el = null;
