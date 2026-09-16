@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+
+      - name: Build
+        run: node build.mjs
+
+      - name: Test
+        run: node --test "test/*.test.mjs"
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Pack tarball
+        run: npm pack
+
+      # 不可变 Release 仓库:必须「先草稿 → 传资产 → 再发布」
+      - name: Create draft release and upload tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^(v)?[0-9] ]]; then TAG="v$(node -p "require('./package.json').version")"; fi
+          gh release create "$TAG" --draft --title "dsh-enterprise $TAG" --generate-notes
+          gh release upload "$TAG" dsh-enterprise-*.tgz
+          gh release edit "$TAG" --draft=false
+          echo "Release published: $TAG"
