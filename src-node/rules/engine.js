@@ -17,16 +17,30 @@ const ruleHits = []
 export function getRuleRuns() { return lastRuleRuns }
 export function getRuleHits() { return ruleHits }
 
-/** 对一条文本跑全部 block-word 规则。返回 { allowed, hit } */
+/** 对一条文本跑全部 block-word 规则。返回 { allowed, hit, matched, snippet, warnHit?, warnMatched? }
+ *  语义：**block 优先**——遍历所有规则，先找 block 级命中（消息将被拦截，只报 block）；
+ *  没有任何 block 命中时，若有 warn 级命中则报第一条 warn（放行 + 提醒）。
+ *  matched = 实际命中的词；snippet = 命中文本开头片段（管理台记录用） */
 export function runTextRules(text) {
   const policy = peekCachedPolicy()
   const rules = (Array.isArray(policy?.clientRules) ? policy.clientRules : []).filter((r) => r.type === 'block-word')
+  const snippet = String(text ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)
+  let warn = null
   for (const r of rules) {
-    let hit = false
-    try { hit = new RegExp(r.value, 'i').test(text) } catch { hit = text.toLowerCase().includes(String(r.value).toLowerCase()) }
-    if (hit) return { allowed: false, hit: r }
+    let matched = null
+    try {
+      const m = new RegExp(r.value, 'i').exec(text)
+      if (m) matched = m[0]
+    } catch {
+      const v = String(r.value).toLowerCase()
+      if (text.toLowerCase().includes(v)) matched = r.value
+    }
+    if (!matched) continue
+    if (r.action === 'block') return { allowed: false, hit: r, matched, snippet }
+    if (!warn) warn = { hit: r, matched }
   }
-  return { allowed: true, hit: null }
+  if (warn) return { allowed: false, hit: warn.hit, matched: warn.matched, snippet }
+  return { allowed: true, hit: null, matched: null, snippet: '' }
 }
 
 /** 规则值 → 纯域名（剥 scheme 与路径尾巴，去掉首点） */
@@ -34,9 +48,11 @@ export function ruleHost(value) {
   return String(value).toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '').split('/')[0].replace(/^\./, '')
 }
 
-/** 校验一个 URL 是否被 block-url 规则拦截。返回 { allowed, hit }
+/** 校验一个 URL 是否被 block-url 规则拦截。返回 { allowed, hit, matched }
+ *  matched = 命中的规则域名/词（横幅加粗显示用）
  *  规则值可以带 scheme（https://外部AI站）也可以不带（裸域名）；
- *  匹配时把规则值的 scheme 前缀剥掉再比对 host，两边写法都命中。 */
+ *  匹配时把规则值的 scheme 前缀剥掉再比对 host，两边写法都命中。
+ *  规则值支持 | 分隔多个域名（如 "google.com|baidu.com"）——逐个拆开比对。 */
 export function runUrlRules(rawUrl) {
   const policy = peekCachedPolicy()
   const rules = (Array.isArray(policy?.clientRules) ? policy.clientRules : []).filter((r) => r.type === 'block-url')
@@ -47,9 +63,16 @@ export function runUrlRules(rawUrl) {
     host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : 'https://' + raw).hostname.toLowerCase()
   } catch { return { allowed: true, hit: null } }
   for (const r of rules) {
-    const v = ruleHost(r.value)
-    if (!v) continue
-    if (host === v || host.endsWith('.' + v)) return { allowed: false, hit: r }
+    // 拆 | 分隔的多域名；兼容用户把它当正则写的习惯
+    const variants = String(r.value ?? '').split('|').map((s) => ruleHost(s)).filter(Boolean)
+    for (const v of variants) {
+      // 三种命中：精确 / 子域名（google.com 拦 news.google.com）/ 裸词（google 拦 *.google.*）
+      if (host === v || host.endsWith('.' + v)) return { allowed: false, hit: r, matched: v }
+      if (!v.includes('.')) {
+        const labels = host.split('.')
+        if (labels.includes(v)) return { allowed: false, hit: r, matched: v }
+      }
+    }
   }
   return { allowed: true, hit: null }
 }

@@ -5,11 +5,13 @@
  *   - 心跳 401 自动清场（账号被网关停用/凭证被吊销，票已无效不再调远程）
  */
 import { existsSync, readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { writeTextAtomic, readJsonSafe } from '../shared/fs-utils.js'
 import { dshSettingsFile, entSettingsFile, credentialsFile } from '../shared/paths.js'
 import { pluginLog } from '../shared/log.js'
 import { saveState, readState } from '../state/state.js'
 import { removeProviderFromSettingsYaml } from '../settings/yaml-edit.js'
+import { GATEWAY_KEY_REF } from '../settings/provider-config.js'
 
 /**
  * 清空本地企业配置与凭证，回到未登录状态（网关地址保留）。
@@ -45,11 +47,23 @@ export function logoutLocal(reason = '用户登出') {
     }
     if (cleaned !== raw) writeTextAtomic(mainSettings, cleaned)
   }
-  // 3. .credentials.yaml：移除 ENT_GATEWAY_TOKEN
+  // 3. .credentials.yaml：移除网关凭证（新旧两个引用名都清）
   const credPath = credentialsFile()
   if (existsSync(credPath)) {
-    const raw = readFileSync(credPath, 'utf8').replace(/^\s*ENT_GATEWAY_TOKEN:\s*.*\r?\n?/m, '')
+    const raw = readFileSync(credPath, 'utf8')
+      .replace(/^\s*ENT_GATEWAY_TOKEN:\s*.*\r?\n?/m, '')
+      .replace(new RegExp('^\\s*' + GATEWAY_KEY_REF + ':\\s*.*\\r?\\n?', 'm'), '')
     writeTextAtomic(credPath, raw)
+  }
+  // 3.5 清宿主进程 env 与用户级注册表环境变量：宿主 credentials-local 的 inherited 层
+  //     （启动时冻结的 env 快照）优先于文件层——注册表残留票会在下次启动时重新遮蔽文件里的新票。
+  //     （本进程内的 process.env 同步删；HKCU 的删掉后下个新实例的快照就干净了。）
+  try { delete process.env.ENT_GATEWAY_TOKEN } catch { /* 尽力而为 */ }
+  try { delete process.env[GATEWAY_KEY_REF] } catch { /* 尽力而为 */ }
+  if (process.platform === 'win32') {
+    try {
+      execFileSync('reg', ['delete', 'HKCU\\Environment', '/v', 'ENT_GATEWAY_TOKEN', '/f'], { stdio: 'ignore' })
+    } catch { /* 值本就不存在，忽略 */ }
   }
   // 4. 清 state 里的令牌与登录痕迹（gateway 保留：登录页预填"上次使用的网关"）
   const st = readState()

@@ -146,6 +146,8 @@ export function createRoutes(ctx) {
           rules: policy?.clientRules ?? [],
           runs: getRuleRuns(),
           hits: getRuleHits(),
+          gatewayBannerStyle: policy?.bannerStyle ?? null,        // 网关全局默认样式
+          gatewayBannerPosition: policy?.bannerPosition ?? null,  // 网关全局默认位置
         })
       },
     },

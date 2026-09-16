@@ -6,7 +6,7 @@ import { existsSync, copyFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeTextAtomic, readJsonSafe } from '../shared/fs-utils.js'
 import { dshHome, entSettingsFile, credentialsFile } from '../shared/paths.js'
-import { writeCredential, writeProviderConfig } from '../settings/provider-config.js'
+import { writeCredential, writeProviderConfig, GATEWAY_KEY_REF } from '../settings/provider-config.js'
 import { syncMainSettingsProvider } from '../settings/yaml-edit.js'
 // readState 必须导入：repairConfigure 首行就要用——漏导入会让"一键配置"和心跳指纹
 // 自动重配每次都抛 ReferenceError（被 catch 包装成"网关不可达"静默失败），模型永不跟随网关更新
@@ -65,7 +65,7 @@ export async function loginAndConfigure({ server, username, password }) {
   settings.providers['ent-gateway'] = {
     displayName: '企业统一模型网关',
     api: 'openai-completions',
-    apiKeyEnv: 'ENT_GATEWAY_TOKEN',
+    apiKeyEnv: GATEWAY_KEY_REF,
     baseUrl: base,
     compat: { thinkingFormat: 'openai' },
     models,
@@ -74,15 +74,19 @@ export async function loginAndConfigure({ server, username, password }) {
   // 同步主 settings.yaml（llm-pi-ai 运行时从这里解析 provider 定义）
   syncMainSettingsProvider(base, models)
 
-  // 4. 写 .credentials.yaml（ENT_GATEWAY_TOKEN → JWT）
+  // 4. 写 .credentials.yaml（ENT_GATEWAY_TOKEN → JWT，插件内同步宿主 process.env）
   writeCredential(token)
 
-  // 5. 写用户级环境变量（部分 DSH 形态从 env 读取；Windows 用 reg，尽力而为）
+  // 5. 绝不写 HKCU\Environment：宿主启动时冻结 env 快照（launchEnvironment "process" 层），
+  //    credentials-local 解析 ref 时 inherited 快照永远压过 .credentials.yaml 文件层——
+  //    注册表里的过期票（网关换密钥/出厂重置后）会让登录后的新票对聊天链路不可见，
+  //    对话持续 401「API 密钥无效」。反之注册表里已有旧票的存量机器：登录时顺手清掉，
+  //    让文件层（watch 热重载）接管，下个心跳周期聊天即恢复。
   if (process.platform === 'win32') {
     try {
       const { execFileSync } = await import('node:child_process')
-      execFileSync('reg', ['add', 'HKCU\\Environment', '/v', 'ENT_GATEWAY_TOKEN', '/t', 'REG_SZ', '/d', token, '/f'], { stdio: 'ignore' })
-    } catch { /* 尽力而为 */ }
+      execFileSync('reg', ['delete', 'HKCU\\Environment', '/v', 'ENT_GATEWAY_TOKEN', '/f'], { stdio: 'ignore' })
+    } catch { /* 值本就不存在，忽略 */ }
   }
 
   // 6. 记录会话信息（供设置页显示 + 心跳用）

@@ -186,3 +186,66 @@ test('heartbeat 5xx 且 /auth/verify 正常（网关自身故障）：不清场'
   try { await runHeartbeatOnce(); await runHeartbeatOnce() } finally { globalThis.fetch = origFetch }
   assert.equal(readState().user, 'u', 'verify 说票有效：网关 5xx 属网关故障，不应清场')
 })
+
+test('heartbeat 兜底对账：凭证文件 token 与宿主 env 不一致时同步 env（聊天链路立即用新票）', async () => {
+  __resetForTest()
+  setupLoggedIn()
+  process.env.ENT_GATEWAY_TOKEN = 'stale-env-token'
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response('{"ok":true,"auth":{"ok":true}}', { status: 200 })
+  try { await runHeartbeatOnce() } finally {
+    globalThis.fetch = origFetch
+    delete process.env.ENT_GATEWAY_TOKEN
+  }
+  assert.equal(process.env.ENT_GATEWAY_TOKEN, undefined, '测试结束应清理 env')
+})
+
+test('writeCredential 同步宿主 env：登录/续期写新票后聊天链路无需等文件监听', async () => {
+  const { writeCredential } = await import('../src-node/settings/provider-config.js')
+  const orig = process.env.ENT_GATEWAY_TOKEN
+  try {
+    writeCredential('fresh-jwt-token')
+    assert.equal(process.env.ENT_GATEWAY_TOKEN, 'fresh-jwt-token', '写凭证必须同步宿主进程 env')
+    assert.match(readFileSync(join(process.env.DSH_HOME, '.credentials.yaml'), 'utf8'), /ENT_GATEWAY_TOKEN: fresh-jwt-token/)
+  } finally {
+    if (orig === undefined) delete process.env.ENT_GATEWAY_TOKEN
+    else process.env.ENT_GATEWAY_TOKEN = orig
+  }
+})
+
+test('logoutLocal 清宿主 env 与注册表残留：登出后环境变量不遮蔽文件新票', async () => {
+  const { logoutLocal } = await import('../src-node/auth/logout.js')
+  setupLoggedIn()
+  process.env.ENT_GATEWAY_TOKEN = 'old-token'
+  logoutLocal('测试登出')
+  try {
+    assert.equal(process.env.ENT_GATEWAY_TOKEN, undefined, '登出应清掉宿主 env 里的旧票')
+  } finally { delete process.env.ENT_GATEWAY_TOKEN }
+})
+
+test('loginAndConfigure 不写 HKCU 环境变量并清理存量旧票（启动快照会永久遮蔽文件层）', async () => {
+  const src = readFileSync(new URL('../src-node/auth/login.js', import.meta.url), 'utf8')
+  assert.ok(!/reg['"]\s*,\s*\['add/i.test(src), 'login 不得再 reg add ENT_GATEWAY_TOKEN（快照遮蔽文件层）')
+  assert.ok(/reg['"]\s*,\s*\['delete/i.test(src), 'login 应清理注册表存量旧票')
+  const logoutSrc = readFileSync(new URL('../src-node/auth/logout.js', import.meta.url), 'utf8')
+  assert.ok(/reg['"]\s*,\s*\['delete/i.test(logoutSrc), 'logout 应清理注册表旧票')
+})
+
+test('凭证引用名迁移：settings.yaml 旧引用名 → V2，凭证文件补 V2 ref（快照遮蔽根治）', async () => {
+  const home = process.env.DSH_HOME
+  const { migrateGatewayKeyRef, GATEWAY_KEY_REF } = await import('../src-node/settings/provider-config.js')
+  // 夹具：旧引用名的 provider 配置 + 旧 ref 的凭证
+  writeFileSync(join(home, 'settings.yaml'), 'llm-pi-ai:\n  providers:\n    ent-gateway:\n      apiKeyEnv: ENT_GATEWAY_TOKEN\n      models: []\n')
+  writeFileSync(join(home, '.credentials.yaml'), 'version: 1\nrefs:\n  ENT_GATEWAY_TOKEN: tok-legacy\n')
+  const n = migrateGatewayKeyRef()
+  assert.ok(n >= 1, '应迁移至少 1 个文件')
+  const s = readFileSync(join(home, 'settings.yaml'), 'utf8')
+  assert.ok(s.includes(`apiKeyEnv: ${GATEWAY_KEY_REF}`), 'settings.yaml 应改用 V2 引用名')
+  assert.ok(!s.includes('apiKeyEnv: ENT_GATEWAY_TOKEN\n'), '不应残留旧引用名（V2 前缀除外）')
+  const c = readFileSync(join(home, '.credentials.yaml'), 'utf8')
+  assert.match(c, new RegExp(`${GATEWAY_KEY_REF}: tok-legacy`), '凭证文件应补 V2 ref（值同旧票）')
+  // 幂等：再跑一遍 0 改动
+  const s2 = readFileSync(join(home, 'settings.yaml'), 'utf8')
+  migrateGatewayKeyRef()
+  assert.equal(readFileSync(join(home, 'settings.yaml'), 'utf8'), s2, '重复迁移应幂等')
+})

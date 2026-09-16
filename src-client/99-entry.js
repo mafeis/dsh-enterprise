@@ -53,6 +53,13 @@
 					// slots 不可用（旧版本 host）：面板注册失败不影响遮罩
 				}
 
+				// 回复末尾企业提醒横幅：轮询 warn 命中 → turnTail 插槽（AI 回复正下方）显示（不进模型上下文）
+				try {
+					registerWarnBanner(ctx, cleanups);
+				} catch (e) {
+					// slots 不可用（旧版本 host）：横幅注册失败不影响其他功能
+				}
+
 				// 企业管控：只要插件在运行就隐藏设置里的「模型」页——模型只能通过企业账号配置。
 				// 插件安装 = 隐藏生效；插件卸载 = 本代码不再运行，模型页自动恢复显示。
 				// 实现：MutationObserver 监听设置面板导航，找到 label 为「模型」的 navCell 一律隐藏。

@@ -29,15 +29,23 @@ export function registerRuleHooks(ctx) {
               ctx.logger.warn(`[enterprise] 高风险命令提示（${danger.label}）：${argsText.slice(0, 100)}`)
             }
           }
-          // URL 检查：从工具参数里抽 http(s) 链接逐个过 block-url 规则
+          // URL 检查：从工具参数里抽 http(s) 链接逐个过 block-url 规则——
+          // 分级与文字规则一致：warn（提醒）放行 + 记录（客户端弹横幅）；block（禁止）才 deny
           const urls = argsText.match(/https?:\/\/[^\s"'\\<>]+/g) ?? []
           for (const u of urls) {
             const r = runUrlRules(u)
             if (!r.allowed) {
-              noteRuleRun('block-url', false)
-              recordRuleHit(r.hit, `${exec?.name ?? 'tool'}: ${u}`)
-              ctx.logger.warn(`[enterprise] 拦截工具 ${exec?.name} 访问 ${u}（规则 ${r.hit?.id}）`)
-              return { kind: 'deny', reason: `[企业管控] ${r.hit?.message || '该地址被企业规则禁止访问'}（规则 ${r.hit?.id}）` }
+              const blockedUrl = r.hit?.action === 'block'
+              noteRuleRun('block-url', !blockedUrl)
+              // 提示语 [] 占位符统一填充命中域名（与文字规则同一约定）；style 透传（客户端横幅样式配置）
+              const fillMessage = (r.hit?.message || '').replaceAll('[]', r.matched ?? '')
+              recordRuleHit(r.hit, `${exec?.name ?? 'tool'}: ${u}`, { kind: 'url', url: u.slice(0, 200), matched: r.matched ?? '', message: fillMessage, style: r.hit?.style ?? null, blocked: blockedUrl })
+              if (!blockedUrl) {
+                ctx.logger.warn(`[enterprise] 工具 ${exec?.name} 访问 ${u} 命中提醒级 URL 规则 ${r.hit?.id}：放行（客户端展示提醒）`)
+                continue
+              }
+              ctx.logger.warn(`[enterprise] 拦截工具 ${exec?.name} 访问 ${u}（规则 ${r.hit?.id}，block 级 URL）`)
+              return { kind: 'deny', reason: `[企业管控] ${fillMessage || '该地址被企业规则禁止访问'}（规则 ${r.hit?.id}）` }
             }
           }
         } catch { /* 规则引擎故障不阻塞工具执行 */ }
@@ -47,7 +55,7 @@ export function registerRuleHooks(ctx) {
     try {
       disposers.push(ctx.on('tools/post-execute', async (exec, result, next) => {
         try {
-          // web_search 结果过滤：来源命中被禁域名直接剔除（模型引用不到、不会跟进 fetch）
+          // web_search 结果过滤：**只剔除 block 级**命中的来源（warn 级保留，客户端可弹提醒）
           if (exec?.name !== 'web_search' || result?.isError) return next()
           const v = result?.value
           if (!v || !Array.isArray(v.sources)) return next()
@@ -56,7 +64,7 @@ export function registerRuleHooks(ctx) {
           let removed = 0
           for (const s of v.sources) {
             const r = runUrlRules(s?.url)
-            if (!r.allowed) { removed++; recordRuleHit(r.hit, `web_search 来源: ${s?.url ?? ''}`, { kind: 'search' }); continue }
+            if (!r.allowed && r.hit?.action === 'block') { removed++; recordRuleHit(r.hit, `web_search 来源: ${s?.url ?? ''}`, { kind: 'search', blocked: true }); continue }
             kept.push(s)
           }
           if (!removed) return next()
@@ -70,13 +78,33 @@ export function registerRuleHooks(ctx) {
       disposers.push(ctx.on('agent/pre-step', async (payload, next) => {
         try {
           await fetchPolicySnapshot()
-          const text = (Array.isArray(payload?.messages) ? payload.messages : [])
-            .map((m) => (typeof m?.content === 'string' ? m.content : JSON.stringify(m?.content ?? '')))
-            .join('\n')
+          const msgs = Array.isArray(payload?.messages) ? payload.messages : []
+          // 拼纯文本：content 是字符串直接用；是块数组（[{type:'text',text:...}]）取 text 块拼接，
+          // 避免 JSON 化的原文进入横幅/记录（可读性差）
+          const text = msgs.map((m) => {
+            if (typeof m?.content === 'string') return m.content
+            if (Array.isArray(m?.content)) {
+              return m.content.filter((c) => c?.type === 'text' && typeof c.text === 'string').map((c) => c.text).join(' ')
+            }
+            return ''
+          }).filter(Boolean).join('\n')
           const r = runTextRules(text)
-          if (!r.allowed && r.hit?.action !== 'warn') {
+          if (!r.allowed) {
+            // 管理台记录：命中词 + 规则 + 消息片段；员工横幅只用 matched/message（见 /api/enterprise/rules）
+            const detail = `命中「${r.matched}」（规则 ${r.hit?.id ?? '?'}）｜消息：${r.snippet}`
+            // 管理员提示语支持 [] 占位符：记录前把命中的词填进去（横幅直接显示成品文案）；style 透传
+            const fillMessage = (r.hit?.message || '').replaceAll('[]', r.matched ?? '')
+            const ruleStyle = r.hit?.style ?? null
+            if (r.hit?.action === 'warn') {
+              // warn 级：放行 + 记命中记录（管理台/客户端横幅数据源），**不进模型上下文**——
+              // 员工侧的界面提醒由客户端轮询命中记录后在回复末尾渲染（见 src-client/95-turn-banner.js）
+              noteRuleRun('block-word', true)
+              recordRuleHit(r.hit, detail, { kind: 'word', matched: r.matched, message: fillMessage, style: ruleStyle, snippet: r.snippet })
+              ctx.logger.warn(`[enterprise] 出站消息命中提醒级规则 ${r.hit?.id}（${r.hit?.value}）：已记录（客户端展示提醒）`)
+              return next()
+            }
             noteRuleRun('block-word', false)
-            recordRuleHit(r.hit, '出站消息命中', { kind: 'word' })
+            recordRuleHit(r.hit, detail, { kind: 'word', matched: r.matched, message: fillMessage, style: ruleStyle, snippet: r.snippet, blocked: true })
             ctx.logger.warn(`[enterprise] 拦截出站消息（规则 ${r.hit?.id}，block 级敏感词）`)
             return { kind: 'reject' }
           }

@@ -6,13 +6,14 @@
  *  - 状态热生效：网关地址每拍重读状态文件（换网关无需重启实例）；
  *    心跳开关/间隔经状态文件监听秒级重载，每拍 tick 还有一层配置比对兜底
  */
-import { writeCredential } from '../settings/provider-config.js'
+import { writeCredential, syncCredentialEnv } from '../settings/provider-config.js'
 import { saveState, readState, readToken } from '../state/state.js'
 import { collectDeviceInfo } from '../device/device-info.js'
 import { pluginLog, ctxLoggerInfoSafe } from '../shared/log.js'
 import { repairConfigure } from '../auth/login.js'
 import { logoutLocal } from '../auth/logout.js'
 import { enforcePluginAllowlist, PROTECTED_PLUGINS, retryPendingPluginEntities } from '../enforce/plugin-enforce.js'
+import { peekCachedPolicy } from '../policy/policy.js'
 import { statePath } from '../shared/paths.js'
 import { watch } from 'node:fs'
 import { dirname } from 'node:path'
@@ -192,9 +193,15 @@ export async function runHeartbeatOnce() {
     await refreshTokenIfNeeded(base, readToken())
     const cur = readState()
     const liveToken = readToken() ?? ''
+    // 兜底对账：凭证文件与宿主进程 env 不一致（外部改文件/修复流程直写文件）时同步 env。
+    // 聊天运行时按 apiKeyEnv 引用解析 key，env 里的过期票会让对话 401「API 密钥无效」；
+    // writeCredential 已在写入时同步，这里覆盖其他更新凭证文件的路径。
+    syncCredentialEnv(liveToken)
     const dev = await collectDeviceInfo()
     const body = {
-      profile: 'web', env: 'dsh-plugin', policyVersion: 'enterprise-0.2', node: process.version,
+      // policyVersion 报当前已缓存的策略版本（此前写死 'enterprise-0.2'，管理台灰度核对
+      // 没法用心跳侧版本区分「没拉到新版」和「已生效」）；尚未拉到任何策略时报空串
+      profile: 'web', env: 'dsh-plugin', policyVersion: peekCachedPolicy()?.version ?? '', node: process.version,
       account: cur.user ?? '',
     }
     if (diffDeviceChanged(dev)) {

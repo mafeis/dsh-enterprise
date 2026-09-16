@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { writeTextAtomic } from '../shared/fs-utils.js'
 import { dshSettingsFile } from '../shared/paths.js'
 import { ctxLoggerInfoSafe } from '../shared/log.js'
+import { GATEWAY_KEY_REF } from './provider-config.js'
 
 /**
  * 从 settings.yaml 文本中移除 llm-pi-ai.providers 下指定 provider 的整块定义。
@@ -175,7 +176,8 @@ export function syncOneMainSettingsProvider(mainSettings, base, models) {
   const block = [
     '    ent-gateway:',
     '      displayName: 企业统一模型网关',
-    '      apiKeyEnv: ENT_GATEWAY_TOKEN',
+    // 凭证引用名用 V2：快照层（历史 env 污染）查不到 V2 → 文件层永远生效（见 provider-config.js GATEWAY_KEY_REF）
+    '      apiKeyEnv: ' + GATEWAY_KEY_REF,
     '      api: openai-completions',
     '      baseURL: ' + base + '/v1',
     '      compat:',

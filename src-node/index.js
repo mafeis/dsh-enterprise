@@ -29,7 +29,7 @@ import { readState, readToken } from './state/state.js'
 import { dshHome, dshSettingsFile } from './shared/paths.js'
 import { readJsonSafe } from './shared/fs-utils.js'
 import { setHostLogger, pluginLog, ctxLoggerInfoSafe } from './shared/log.js'
-import { ensurePlaceholderDeepseekKey } from './settings/provider-config.js'
+import { ensurePlaceholderDeepseekKey, migrateGatewayKeyRef } from './settings/provider-config.js'
 import { profilePatchSettingsPaths, ensureWelcomeNoticeAck } from './settings/yaml-edit.js'
 import { repairConfigure } from './auth/login.js'
 import { VERSION } from './shared/version.js'
@@ -49,6 +49,9 @@ export function apply(ctx) {
     pluginLog(`插件就绪（版本 ${VERSION}，home=${dshHome()}，gateway=${readState().gateway ?? '未登录'}）`)
     syncHeartbeatTimer(ctx)
     ensurePlaceholderDeepseekKey()
+    // 凭证引用名迁移（V2）：快照层旧票遮蔽文件层的存量机器，切到快照里不存在的
+    // 新引用名后聊天链路直接改走文件层（热重载），无需重启任何进程
+    migrateGatewayKeyRef()
     // 内测横幅预签必须在激活时（不能等登录）：新装机的横幅在登录遮罩之前就弹
     ensureWelcomeNoticeAck()
     // 插件管控：启动 4s 后按网关允许清单自动清理清单外插件（manifest 移除，重启后不再加载）。
