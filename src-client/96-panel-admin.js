@@ -13,18 +13,19 @@
 				try { sessionStorage.setItem(ENT_TAB_KEY, id); } catch { /* 忽略 */ }
 			};
 			const status = useStatus();
+			const t = useT2();
 			const tabs = [
-				{ id: "account", label: "账号管理", comp: AccountPanel },
-				{ id: "models", label: "企业模型", comp: ModelsPanel },
-				{ id: "usage", label: "我的消耗", comp: UsagePanel },
-				{ id: "plugins", label: "插件管理", comp: PluginGovernancePanel, alert: !!(status?.pluginGovernance?.violations?.length) },
-				{ id: "policy", label: "规则管理", comp: EntPolicyPanel },
+				{ id: "account", label: t("账号管理", "Account"), comp: AccountPanel },
+				{ id: "models", label: t("企业模型", "Models"), comp: ModelsPanel },
+				{ id: "usage", label: t("我的消耗", "Usage"), comp: UsagePanel },
+				{ id: "plugins", label: t("插件管理", "Plugins"), comp: PluginGovernancePanel, alert: !!(status?.pluginGovernance?.violations?.length) },
+				{ id: "policy", label: t("规则管理", "Rules"), comp: EntPolicyPanel },
 			];
-			const Active = tabs.find((t) => t.id === tab)?.comp || AccountPanel;
-			const tabBtns = tabs.map((t) => {
-				const active = tab === t.id;
+			const Active = tabs.find((tb) => tb.id === tab)?.comp || AccountPanel;
+			const tabBtns = tabs.map((tb) => {
+				const active = tab === tb.id;
 				return reactJsx.jsx("button", {
-					key: t.id,
+					key: tb.id,
 					style: {
 						padding: "8px 15px", fontSize: 13, fontFamily: "inherit", cursor: "pointer",
 						border: "none", background: "transparent", marginBottom: -1,
@@ -33,10 +34,10 @@
 						borderBottom: active ? "2px solid #2563eb" : "2px solid transparent",
 						display: "inline-flex", alignItems: "center", gap: 6
 					},
-					onClick: () => selectTab(t.id),
+					onClick: () => selectTab(tb.id),
 					children: [
-						t.label,
-						t.alert ? reactJsx.jsx("span", { style: { width: 7, height: 7, borderRadius: "50%", background: "#dc2626", display: "inline-block" } }) : null
+						tb.label,
+						tb.alert ? reactJsx.jsx("span", { style: { width: 7, height: 7, borderRadius: "50%", background: "#dc2626", display: "inline-block" } }) : null
 					]
 				});
 			});

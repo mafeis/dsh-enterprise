@@ -1,13 +1,13 @@
 		/* ============ 全屏登录遮罩（未配置时自动弹出） ============ */
 
 		async function mountLoginOverlay() {
-			// 预填上次登录的网关地址（state.gateway 登出/清场后保留）：重登零输入
+			// 预填网关地址：上次使用（state.gateway 登出/清场后保留）→ 出厂默认（ENT_GATEWAY_URL / gateway-url.txt）：新机零输入
 			let lastGateway = "";
 			try {
 				const r = await fetch("/api/enterprise/status", { headers: { accept: "application/json" } });
 				if (r.ok) {
 					const s = await r.json();
-					lastGateway = (s && (s.gateway || s.lastGateway)) || "";
+					lastGateway = (s && (s.gateway || s.lastGateway || s.factoryGateway)) || "";
 				}
 			} catch {}
 			const overlay = document.createElement("div");
@@ -31,15 +31,15 @@
 #enterprise-overlay .lockhint { margin-top: 10px; text-align: center; font-size: 12px; color: #94a3b8; }
 </style>
 <div class="box">
-  <h2>企业账号登录</h2>
-  <div class="sub">登录后自动配置企业模型网关，无需手工设置</div>
+  <h2>${t2("企业账号登录", "Enterprise sign-in")}</h2>
+  <div class="sub">${t2("登录后自动配置企业模型网关，无需手工设置", "Sign in to auto-configure the enterprise model gateway")}</div>
   <div class="err" id="enterprise-err"></div>
-  <input id="enterprise-server" placeholder="网关地址" value="${lastGateway.replace(/"/g, "&quot;")}">
-  <input id="enterprise-user" placeholder="账号" autocomplete="username">
-  <input id="enterprise-pass" placeholder="密码" type="password" autocomplete="currenterprise-password">
-  <button id="enterprise-btn">登录并自动配置</button>
+  <input id="enterprise-server" placeholder="${t2("网关地址", "Gateway URL")}" value="${lastGateway.replace(/"/g, "&quot;")}">
+  <input id="enterprise-user" placeholder="${t2("账号", "Account")}" autocomplete="username">
+  <input id="enterprise-pass" placeholder="${t2("密码", "Password")}" type="password" autocomplete="currenterprise-password">
+  <button id="enterprise-btn">${t2("登录并自动配置", "Sign in & auto-configure")}</button>
   <div class="ok" id="enterprise-ok"></div>
-  <div class="lockhint">企业管控：本机由企业账号统一管理，登录后方可使用</div>
+  <div class="lockhint">${t2("企业管控：本机由企业账号统一管理，登录后方可使用", "Enterprise managed: sign in with your enterprise account to use this device")}</div>
 </div>`;
 			document.body.appendChild(overlay);
 
@@ -48,7 +48,7 @@
 
 			const submit = async () => {
 				btn.disabled = true;
-				btn.textContent = "登录中…";
+				btn.textContent = t2("登录中…", "Signing in…");
 				$("enterprise-err").textContent = "";
 				$("enterprise-ok").textContent = "";
 				try {
@@ -65,17 +65,17 @@
 					if (b.ok) {
 						// 配置经 settings watch 热生效，无需重启；若 Desktop 首启向导还挂着
 						//（旧安装未预写 skipped 标记），提示员工直接关掉即可，模型已可用。
-						$("enterprise-ok").innerHTML = "✓ 登录成功，模型已就绪";
-						btn.textContent = "已配置 ✓";
+						$("enterprise-ok").innerHTML = t2("✓ 登录成功，模型已就绪", "✓ Signed in, models ready");
+						btn.textContent = t2("已配置 ✓", "Configured ✓");
 						setTimeout(() => location.reload(), 2600);
 						return;
 					}
-					$("enterprise-err").textContent = b.error || "登录失败";
+					$("enterprise-err").textContent = b.error || t2("登录失败", "Sign-in failed");
 				} catch (e) {
-					$("enterprise-err").textContent = "网络错误：" + (e && e.message ? e.message : e);
+					$("enterprise-err").textContent = t2("网络错误：", "Network error: ") + (e && e.message ? e.message : e);
 				}
 				btn.disabled = false;
-				btn.textContent = "登录并自动配置";
+				btn.textContent = t2("登录并自动配置", "Sign in & auto-configure");
 			};
 			btn.addEventListener("click", submit);
 			$("enterprise-pass").addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });

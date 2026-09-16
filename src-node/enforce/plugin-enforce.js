@@ -145,7 +145,10 @@ function recordCleanup(removed, profileDir) {
 }
 
 /**
- * 执行一次允许清单对账：发现清单外插件立即清理。
+ * 执行一次允许清单对账。处置档位由网关策略 pluginEnforce 决定：
+ *   enforce = 发现清单外插件立即清理（原行为）
+ *   warn    = 仅记日志警告，不动本机
+ *   off     = 不限制，仅记录（心跳/出现史在网关侧照常落库）
  * @param {'startup'|'heartbeat'|'manual'} trigger 触发来源（仅用于日志）
  * @returns {Promise<{ok:boolean, skipped?:string, removed?:Array<{name:string,configOk:boolean,entityOk:boolean}>, protectedMissing?:string[]}>}
  */
@@ -159,6 +162,14 @@ export async function enforcePluginAllowlist(trigger = 'startup') {
     const installed = collectInstalledPlugins()
     if (!installed) return { ok: true, skipped: 'installed-unknown' } // 非 profile 形态，无法对账
 
+    const violations = installed.filter((x) => !allowed.includes(x) && !PROTECTED_PLUGINS.includes(x))
+    // 档位分流：warn/off 不清理本机（off/warn 都只走日志；员工端面板警告与否由 status 的 enforceMode 控制）
+    const mode = policy?.pluginEnforce ?? 'enforce'
+    if (violations.length && mode !== 'enforce') {
+      pluginLog(`[enterprise] 插件管控（档位 ${mode}）：清单外插件 ${violations.join('、')} —— ${mode === 'warn' ? '仅警告不处理' : '不限制仅记录'}`)
+      return { ok: true, skipped: 'mode-' + mode, protectedMissing: [] }
+    }
+
     // 先重试上轮被占用没删掉的残留实体（与本次违规无关，也照删）
     const profileDirEarly = findProfileRoot()
     if (profileDirEarly) retryPendingEntities(profileDirEarly)
@@ -169,7 +180,6 @@ export async function enforcePluginAllowlist(trigger = 'startup') {
       pluginLog(`[enterprise] 插件管控：保护名单 ${protectedMissing.join('、')} 不在允许清单内，已保留（请在管理台允许清单中补上，否则心跳将持续告警）`)
     }
 
-    const violations = installed.filter((x) => !allowed.includes(x) && !PROTECTED_PLUGINS.includes(x))
     if (!violations.length) return { ok: true, removed: [], protectedMissing }
 
     // manifest 写权与 plugin-install 互斥：拿不到就整轮跳过（下轮心跳/启动再试）

@@ -25,7 +25,7 @@ export function registerRuleHooks(ctx) {
           if (SHELL_TOOLS.has(String(exec?.name ?? '').toLowerCase())) {
             const danger = detectDangerousCommand(argsText)
             if (danger) {
-              recordRuleHit({ id: 'danger-cmd', type: 'danger-cmd', action: 'warn' }, `${danger.label}: ${(argsText || '').slice(0, 80)}`, { risk: 'high' })
+              recordRuleHit({ id: 'danger-cmd', type: 'danger-cmd', action: 'warn' }, `${danger.labelEn ?? danger.label}: ${(argsText || '').slice(0, 80)}`, { risk: 'high' })
               ctx.logger.warn(`[enterprise] 高风险命令提示（${danger.label}）：${argsText.slice(0, 100)}`)
             }
           }

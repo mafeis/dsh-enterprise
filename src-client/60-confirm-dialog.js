@@ -24,11 +24,11 @@
 #enterprise-confirm-overlay .ok:hover { background: #b91c1c; }
 </style>
 <div class="box">
-  <h3><span class="warn-ico">!</span><span>${esc(title || "确认操作")}</span></h3>
+  <h3><span class="warn-ico">!</span><span>${esc(title || t2("确认操作", "Confirm"))}</span></h3>
   <p class="msg">${esc(message || "")}</p>
   <div class="btns">
-    <button class="cancel">${esc(cancelText || "取消")}</button>
-    <button class="ok">${esc(confirmText || "确定")}</button>
+    <button class="cancel">${esc(cancelText || t2("取消", "Cancel"))}</button>
+    <button class="ok">${esc(confirmText || t2("确定", "OK"))}</button>
   </div>
 </div>`;
 				document.body.appendChild(overlay);

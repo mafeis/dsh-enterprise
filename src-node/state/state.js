@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeTextAtomic, readJsonSafe } from '../shared/fs-utils.js'
-import { statePath, credentialsFile, dshHome } from '../shared/paths.js'
+import { statePath, credentialsFile, dshHome, gatewayUrlFile } from '../shared/paths.js'
 
 /** v0.5.x 及更早的状态文件名（插件还叫 dsh-ent-login 的时代） */
 const LEGACY_STATE_PATH = join(dshHome(), 'enterprise', 'ent-login-state.json')
@@ -32,4 +32,15 @@ export function readToken() {
   try {
     return (readFileSync(credentialsFile(), 'utf8').match(/^\s*ENT_GATEWAY_TOKEN:\s*(\S+)/m) ?? [])[1] ?? null
   } catch { return null }
+}
+
+/** 出厂网关地址：ENT_GATEWAY_URL 环境变量 → gateway-url.txt（IT 部署预置，一行 URL）→ 空。
+ *  登录页预填兜底：员工新机器零输入（优先级低于上次使用的 state.gateway）。 */
+export function readFactoryGateway() {
+  const env = String(process.env.ENT_GATEWAY_URL ?? '').trim()
+  if (env) return env.replace(/\/+$/, '')
+  try {
+    const raw = readFileSync(gatewayUrlFile(), 'utf8').trim()
+    return raw ? raw.replace(/\/+$/, '') : ''
+  } catch { return '' }
 }

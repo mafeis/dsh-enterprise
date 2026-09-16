@@ -22,3 +22,15 @@
 				return s;
 			};
 		}
+		/** 非 React 场景读当前语言：'zh' | 'en'（读 locale 插件同步的 <html lang>） */
+		function curLocale() {
+			try { return (document.documentElement.lang || "zh-CN").toLowerCase().startsWith("zh") ? "zh" : "en"; }
+			catch { return "zh"; }
+		}
+		/** 双语直取（非 React）：t2('中文', 'English')，en 缺失回退 zh */
+		function t2(zh, en) { return curLocale() === "en" ? (en ?? zh) : zh; }
+		/** 双语直取（React 组件）：const t = useT2(); t('中文', 'English')——语言切换时随宿主 locale 重渲染 */
+		function useT2() {
+			const loc = useUiLocale();
+			return (zh, en) => loc === "en" ? (en ?? zh) : zh;
+		}

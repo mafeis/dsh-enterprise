@@ -31,3 +31,8 @@ export function credentialsFile() {
 export function statePath() {
   return join(dshHome(), 'enterprise', 'enterprise-state.json')
 }
+
+/** 出厂网关地址文件（IT 部署时写入一行 URL；登录页预填兜底，优先级低于上次使用） */
+export function gatewayUrlFile() {
+  return join(dshHome(), 'enterprise', 'gateway-url.txt')
+}

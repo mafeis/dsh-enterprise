@@ -97,21 +97,22 @@ export function setStepHookAlive(v) { stepHookAlive = v }
 export function isStepHookAlive() { return stepHookAlive }
 
 /** 高风险命令特征：删除/格式化/磁盘写入/进程强杀类。命中即在终端规则页置顶提醒。
- *  匹配的是「用户可见的命令语义」而非精确语法，跨 bash/pwsh/cmd 通用。 */
+ *  匹配的是「用户可见的命令语义」而非精确语法，跨 bash/pwsh/cmd 通用。
+ *  label 中文 / labelEn 英文：客户端按宿主语言选择显示。 */
 export const DANGER_CMD_PATTERNS = [
-  { re: /\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)+/i, label: 'rm 递归/强制删除' },
-  { re: /\brm\s+-[a-zA-Z]*r[a-zA-Z]*f|\brm\s+-[a-zA-Z]*f[a-zA-Z]*r/i, label: 'rm 递归强制删除' },
-  { re: /(?:remove-item|ri)\s+.*-recurse/i, label: 'PowerShell 递归删除' },
-  { re: /\bdel\s+\/[sq]\b|\bdel\s+\/s\s+\/q\b|\brd\s+\/s\b|\brmdir\s+\/s\b/i, label: 'cmd 递归删除目录' },
-  { re: /\bformat\s+[a-z]:/i, label: '格式化磁盘' },
-  { re: /\bmkfs(\.\w+)?\b/i, label: 'mkfs 格式化' },
-  { re: /\bdd\s+[^|]*\bof=\/dev\//i, label: 'dd 覆写磁盘设备' },
-  { re: />\s*\/dev\/sd[a-z]|>\s*\/dev\/nvme/i, label: '覆写磁盘设备' },
-  { re: /:\(\)\s*\{\s*:\|:&\s*&\s*\}\s*;:/i, label: 'fork 炸弹' },
-  { re: /\bchmod\s+-R\s+777\s+\//i, label: '全盘开放写权限' },
-  { re: /\b(shutdown|reboot|halt|poweroff)\b/i, label: '关机/重启' },
-  { re: /\btaskkill\s+\/f\s+\/im\b|\bpkill\s+-9\b|\bkill\s+-9\s+1\b/i, label: '强制结束进程' },
-  { re: /\bcipher\s+\/w\b|\bsdelete\b/i, label: '安全擦除' },
+  { re: /\brm\s+(-[a-zA-Z]*[rf][a-zA-Z]*\s+)+/i, label: 'rm 递归/强制删除', labelEn: 'rm recursive/forced delete' },
+  { re: /\brm\s+-[a-zA-Z]*r[a-zA-Z]*f|\brm\s+-[a-zA-Z]*f[a-zA-Z]*r/i, label: 'rm 递归强制删除', labelEn: 'rm recursive force delete' },
+  { re: /(?:remove-item|ri)\s+.*-recurse/i, label: 'PowerShell 递归删除', labelEn: 'PowerShell recursive delete' },
+  { re: /\bdel\s+\/[sq]\b|\bdel\s+\/s\s+\/q\b|\brd\s+\/s\b|\brmdir\s+\/s\b/i, label: 'cmd 递归删除目录', labelEn: 'cmd recursive dir delete' },
+  { re: /\bformat\s+[a-z]:/i, label: '格式化磁盘', labelEn: 'Format disk' },
+  { re: /\bmkfs(\.\w+)?\b/i, label: 'mkfs 格式化', labelEn: 'mkfs format' },
+  { re: /\bdd\s+[^|]*\bof=\/dev\//i, label: 'dd 覆写磁盘设备', labelEn: 'dd overwrite disk device' },
+  { re: />\s*\/dev\/sd[a-z]|>\s*\/dev\/nvme/i, label: '覆写磁盘设备', labelEn: 'overwrite disk device' },
+  { re: /:\(\)\s*\{\s*:\|:&\s*&\s*\}\s*;:/i, label: 'fork 炸弹', labelEn: 'fork bomb' },
+  { re: /\bchmod\s+-R\s+777\s+\//i, label: '全盘开放写权限', labelEn: 'world-writable chmod 777' },
+  { re: /\b(shutdown|reboot|halt|poweroff)\b/i, label: '关机/重启', labelEn: 'shutdown/reboot' },
+  { re: /\btaskkill\s+\/f\s+\/im\b|\bpkill\s+-9\b|\bkill\s+-9\s+1\b/i, label: '强制结束进程', labelEn: 'force-kill process' },
+  { re: /\bcipher\s+\/w\b|\bsdelete\b/i, label: '安全擦除', labelEn: 'secure erase' },
 ]
 
 export function detectDangerousCommand(text) {

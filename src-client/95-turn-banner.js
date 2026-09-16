@@ -44,7 +44,7 @@
 				+ "box-shadow:0 10px 34px rgba(0,0,0,.16);font-family:inherit;font-size:13.5px;line-height:1.55;color:#1f2937";
 			const btn = document.createElement("button");
 			btn.textContent = "×";
-			btn.title = "关闭";
+			btn.title = t2("关闭", "Close");
 			btn.style.cssText = "position:absolute;top:8px;right:10px;border:none;background:transparent;cursor:pointer;"
 				+ "font-size:16px;line-height:1;padding:2px 4px;color:#9ca3af";
 			btn.onmouseenter = () => { btn.style.color = "#374151"; };
@@ -76,7 +76,7 @@
 			icon.textContent = blocked ? "⛔" : "⚠️";
 			row.appendChild(icon);
 			const text = document.createElement("span");
-			const word = hit.matched || (hit.kind === "url" ? "受限网址" : "敏感词");
+			const word = hit.matched || (hit.kind === "url" ? t2("受限网址", "Restricted URL") : t2("敏感词", "Sensitive word"));
 			const msgStr = String(hit.message || "");
 			// 提示语里已含触发词：整句显示，仅关键词加粗
 			if (msgStr.includes(word)) {
@@ -88,13 +88,13 @@
 				if (idx + word.length < msgStr.length) text.appendChild(document.createTextNode(msgStr.slice(idx + word.length)));
 			} else {
 				// 无 [] 占位符：提示语在前，命中词加粗放末尾（与 URL 分支一致，避免词悬在句首很怪）
-				text.appendChild(document.createTextNode(msgStr || (hit.kind === "url" ? "该网址受企业规则管控" : "检测到敏感内容")));
+				text.appendChild(document.createTextNode(msgStr || (hit.kind === "url" ? t2("该网址受企业规则管控", "This URL is restricted by enterprise rules") : t2("检测到敏感内容", "Sensitive content detected"))));
 				if (word) {
-					text.appendChild(document.createTextNode("（"));
+					text.appendChild(document.createTextNode(t2("（", " (")));
 					const bold = document.createElement("b");
 					bold.textContent = word;
 					text.appendChild(bold);
-					text.appendChild(document.createTextNode("）"));
+					text.appendChild(document.createTextNode(t2("）", ")")));
 				}
 			}
 			text.style.cssText = "color:" + cMain;

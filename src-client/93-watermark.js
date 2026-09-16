@@ -19,7 +19,7 @@
 			const st = wmStyle();
 			const loginAt = __entWatermark.loginAt ? String(__entWatermark.loginAt).slice(0, 16).replace("T", " ") : "";
 			const vars = {
-				"{user}": __entWatermark.user || "企业员工",
+				"{user}": __entWatermark.user || t2("企业员工", "Enterprise user"),
 				"{time}": t,
 				"{device}": __entWatermark.device || "",
 				"{loginAt}": loginAt,

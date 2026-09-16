@@ -50,7 +50,7 @@
 							name: "settings.section",
 							id: "enterprise-admin",
 							order: 13,
-							label: () => "企业管理",
+							label: () => t2("企业管理", "Enterprise"),
 							inject: () => ({})
 						}, () => reactJsx.jsx(EnterpriseAdminPanel, {})));
 					}, "enterprise: enterprise admin section");
@@ -72,15 +72,33 @@
 				// 水印失败不影响其他功能
 			}
 
-			// 企业管控：只要插件在运行就隐藏设置里的「模型」页——模型只能通过企业账号配置。
-				// 插件安装 = 隐藏生效；插件卸载 = 本代码不再运行，模型页自动恢复显示。
-				// 实现：MutationObserver 监听设置面板导航，找到 label 为「模型」的 navCell 一律隐藏。
+			// 企业管控：按网关策略隐藏设置页——模型页（lockModelConfig=true 固定藏）+ hiddenSettingsPages 清单（管理员按标签关键词配，双语关键词都写）。
+				// 策略随 /api/enterprise/policy 60s 轮询刷新，宿主改名后管理员在网关加关键词即可，无需发版。
+				// 插件安装 = 隐藏生效；插件卸载 = 本代码不再运行，隐藏页自动恢复显示。
 				try {
+					let policyLabels = new Set(["模型", "Models"]);   // 兜底：策略未拉到前先按默认锁模型页
+					// 拉策略 → 组装要藏的标签集合
+					const pullPolicy = async () => {
+						try {
+							const r = await apiGet("/api/enterprise/policy");
+							if (r && r.ok && r.policy) {
+								const p = r.policy;
+								const labels = new Set();
+								if (p.lockModelConfig !== false) { labels.add("模型"); labels.add("Models"); }
+								for (const kw of (Array.isArray(p.hiddenSettingsPages) ? p.hiddenSettingsPages : [])) {
+									const s = String(kw || "").trim(); if (s) labels.add(s);
+								}
+								policyLabels = labels;
+							}
+						} catch { /* 策略拉不到：沿用上一份 */ }
+						scan();
+					};
 					const scan = () => {
 						const navCells = document.querySelectorAll("nav button");
 						for (const btn of navCells) {
 							const label = btn.querySelector("span");
-							if (label && label.textContent.trim() === "模型") {
+							const txt = label && label.textContent.trim();
+							if (txt && policyLabels.has(txt)) {
 								btn.style.display = "none";
 							}
 						}
@@ -89,6 +107,9 @@
 					mo.observe(document.body, { childList: true, subtree: true });
 					scan();
 					cleanups.push(() => { mo.disconnect(); });
+					void pullPolicy();
+					const policyT = setInterval(() => void pullPolicy(), 60000);
+					cleanups.push(() => clearInterval(policyT));
 				} catch {}
 
 				return () => { disposed = true; for (const c of cleanups) { try { c() } catch {} } };

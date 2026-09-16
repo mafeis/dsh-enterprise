@@ -5,7 +5,7 @@
 
 		function mountViolationOverlay(cleanup) {
 			if (document.getElementById("enterprise-violation-overlay")) return;
-			const names = (cleanup.names || []).join("、") || "未知插件";
+			const names = (cleanup.names || []).join(t2("、", ", ")) || t2("未知插件", "Unknown plugin");
 			const overlay = document.createElement("div");
 			overlay.id = "enterprise-violation-overlay";
 			overlay.innerHTML = `
@@ -28,16 +28,16 @@
 </style>
 <div class="box">
   <div class="ico">🛡️</div>
-  <h2>发现异常插件，已自动卸载</h2>
+  <h2>${t2("发现异常插件，已自动卸载", "Suspicious plugin auto-uninstalled")}</h2>
   <div class="names">${names.replace(/</g, "&lt;")}</div>
-  <div class="sub">该插件不在企业允许清单内，已被安全策略移除。重启 DSH 后清理完成方可继续使用。</div>
-  <button id="enterprise-violation-restart">立即重启 DSH</button>
-  <div class="hint">企业安全策略：未重启完成前本机不可用（与企业登录同级别管控）</div>
+  <div class="sub">${t2("该插件不在企业允许清单内，已被安全策略移除。重启 DSH 后清理完成方可继续使用。", "This plugin is not on the enterprise allowlist and was removed by security policy. Restart DSH to continue.")}</div>
+  <button id="enterprise-violation-restart">${t2("立即重启 DSH", "Restart DSH now")}</button>
+  <div class="hint">${t2("企业安全策略：未重启完成前本机不可用（与企业登录同级别管控）", "Enterprise security policy: this device is unavailable until DSH is restarted")}</div>
 </div>`;
 			document.body.appendChild(overlay);
 			overlay.querySelector("#enterprise-violation-restart").addEventListener("click", async (e) => {
 				e.target.disabled = true;
-				e.target.textContent = "正在重启…";
+				e.target.textContent = t2("正在重启…", "Restarting…");
 				try {
 					// 宿主桌面重启接口：与设置页同一 webserver（同源同 session，浏览器凭证自动携带）
 					const r = await fetch("/api/desktop/restart", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
@@ -46,7 +46,7 @@
 				// 重启是异步的：宿主进程退出时窗口随之关闭；若 5s 后还在（接口失败），提示手动重启
 				setTimeout(() => {
 					const b = overlay.querySelector("#enterprise-violation-restart");
-					if (b) { b.disabled = false; b.textContent = "重启未响应 · 请手动重启 DSH"; }
+					if (b) { b.disabled = false; b.textContent = t2("重启未响应 · 请手动重启 DSH", "Restart not responding · restart DSH manually"); }
 				}, 5000);
 			});
 		}

@@ -193,6 +193,23 @@ export const MARKET_DESC_ZH = {
   '@vlln/dsh-navbar': '对话节点导航条：快速跳转到任意 user 消息',
 }
 
+/** 英文名录：descriptionEn 兜底（仓库未维护英文描述时）。 */
+export const MARKET_DESC_EN = {
+  'dsh-enterprise': 'Enterprise sign-in, model gateway and security governance (this plugin)',
+  'dshmarket': 'Visual plugin market built into DSH',
+  'dsh-better-sidebar': 'VSCode-style sidebar: conversation outline / terminal / file tree',
+  'dsh-context': 'Conversation context: inject workspace and project background',
+  'dsh-mnemon': 'Three-tier memory management (session / project / long-term)',
+  'dsh-startup-guard': 'Startup guard: auto-restore session after abnormal host shutdown',
+  'dsh-hot-reload': 'Hot plugin updates: upgrade installed plugins without restarting DSH',
+  'dsh-review': 'Multi-agent adversarial code review (bundled)',
+  '@deepseek-ai/dsh-headless': 'Headless mode: run DSH sessions on servers / CI',
+  '@deepseek-ai/dsh-base': 'DSH host base component (required)',
+  '@deepseek-ai/dsh-web-app': 'DSH web UI (required)',
+  '@anysearch/anysearch-dsh': 'AnySearch web search and fetch provider',
+  '@vlln/dsh-navbar': 'Conversation node navbar: jump to any user message',
+}
+
 /** 批量拉 npm registry 的 description（每个包 3s 超时，10 分钟缓存）。
  *  私有包/离线环境拿不到就返回空串，市场卡退化为纯包名展示。 */
 const marketMetaCache = { at: 0, data: {} }

@@ -24,9 +24,9 @@ import { join } from 'node:path'
 import { writeTextAtomic, readJsonSafe } from '../shared/fs-utils.js'
 import { entSettingsFile } from '../shared/paths.js'
 import { pluginLog } from '../shared/log.js'
-import { readState, saveState, readToken } from '../state/state.js'
+import { readState, saveState, readToken, readFactoryGateway } from '../state/state.js'
 import { collectInstalledPlugins, collectDeviceInfo } from '../device/device-info.js'
-import { fetchPolicySnapshot, resolvePluginInstallSpec, runPluginCli, findProfileRoot, MARKET_DESC_ZH, marketMeta, peekCachedPolicy } from '../policy/policy.js'
+import { fetchPolicySnapshot, resolvePluginInstallSpec, runPluginCli, findProfileRoot, MARKET_DESC_ZH, MARKET_DESC_EN, marketMeta, peekCachedPolicy } from '../policy/policy.js'
 import { PROTECTED_PLUGINS, isEnforceBusy, claimManifestOp, releaseManifestOp } from '../enforce/plugin-enforce.js'
 import { RULE_ENGINE_VERSION, runTextRules, runUrlRules, noteRuleRun, getRuleRuns, getRuleHits, isStepHookAlive, ruleHost } from '../rules/engine.js'
 import { currentHeartbeatState, runHeartbeatOnce, syncHeartbeatTimer } from '../heartbeat/heartbeat.js'
@@ -65,15 +65,20 @@ export function createRoutes(ctx) {
         const policy = await fetchPolicySnapshot()
         const allowed = Array.isArray(policy?.allowedPlugins) ? policy.allowedPlugins : []
         const installed = collectInstalledPlugins() ?? []
-        // 描述优先级：策略下发的插件仓库描述（管理员在网关维护，中英皆可）→ 内置名录 → npm 兜底
+        // 描述优先级（zh/en 成对）：策略下发的插件仓库描述（管理员在网关维护双语）→ 内置名录 → npm 兜底
         const meta = policy?.pluginMeta ?? {}
-        const npmDesc = await marketMeta(allowed.filter((n) => !(meta[n]?.description) && !MARKET_DESC_ZH[n]))
-        const items = allowed.map((name) => ({
-          name,
-          installed: installed.includes(name),
-          descriptionZh: meta[name]?.description || MARKET_DESC_ZH[name] || '',
-          description: meta[name]?.description || MARKET_DESC_ZH[name] || (npmDesc[name] ?? ''),
-        }))
+        const npmDesc = await marketMeta(allowed.filter((n) => !(meta[n]?.description) && !MARKET_DESC_ZH[n] && !MARKET_DESC_EN[n]))
+        const items = allowed.map((name) => {
+          const zh = meta[name]?.descriptionZh || meta[name]?.description || MARKET_DESC_ZH[name] || ''
+          const en = meta[name]?.descriptionEn || MARKET_DESC_EN[name] || (zh ? '' : (npmDesc[name] ?? ''))
+          return {
+            name,
+            installed: installed.includes(name),
+            descriptionZh: zh,
+            descriptionEn: en,
+            description: zh,   // 兼容旧客户端：description 仍为中文
+          }
+        })
         json(200, { ok: true, items, installedOthers: installed.filter((x) => !allowed.includes(x)) })
       },
     },
@@ -301,6 +306,7 @@ export function createRoutes(ctx) {
           configured: !!p,
           gateway: p?.baseUrl ?? state.gateway ?? '',
           lastGateway: state.gateway ?? '',
+          factoryGateway: readFactoryGateway(),
           models: (p?.models ?? state.models ?? []).map((m) => (typeof m === 'string' ? m : m.id)),
           defaultModel: s?.['agent-default-model']?.model ?? '',
           user: state.user ?? '',
@@ -319,6 +325,8 @@ export function createRoutes(ctx) {
             allowedPlugins: allowedPlugins ?? [],
             allowedUnknown: allowedPlugins === null,
             violations,
+            // 清单外处置档位（网关策略下发）：enforce=自动卸载 warn=仅警告 off=仅记录
+            enforceMode: policySnap?.pluginEnforce ?? 'enforce',
             // 管控清理记录：本次 DSH 进程启动之后发生过清理 → 提示「重启后完全生效」
             //（被移除插件的 bundle 已随本进程启动加载，内存里无法卸载，重启后不再加载）
             pendingRestart: (state.lastPluginCleanup?.names?.length
@@ -444,12 +452,13 @@ export function createRoutes(ctx) {
         const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)) }
         if (!body.username || !body.password) return json(400, { ok: false, error: '需要 username 和 password' })
         try {
-          // server 缺省优先级：本次提交 > 上次使用的网关（state.gateway，登出后仍保留）> 出厂默认
+          // server 缺省优先级：本次提交 > 上次使用的网关（state.gateway，登出后仍保留）> 出厂默认（ENT_GATEWAY_URL / gateway-url.txt）
           const state = readState()
-          const r = await loginAndConfigure({ server: body.server ?? state.gateway ?? '', username: body.username, password: body.password })
+          const effServer = body.server ?? state.gateway ?? readFactoryGateway()
+          const r = await loginAndConfigure({ server: effServer, username: body.username, password: body.password })
           if (r.ok) {
             ctx.logger.info(`[enterprise] 用户 ${r.user} 登录成功，已配置 ${r.models.length} 个企业模型`)
-            pluginLog(`登录成功 user=${r.user} server=${body.server ?? state.gateway ?? '(出厂默认)'} 模型=${r.models.length} 个`)
+            pluginLog(`登录成功 user=${r.user} server=${effServer || '(空)'} 模型=${r.models.length} 个`)
             // 登录成功立即补一拍心跳：状态面板马上从"离线/账号状态异常(旧残留)"翻成在线，
             // 不等下一拍（最长 intervalSec）；此刻凭证已写入，心跳带真票，网关回 auth.ok=true
             void runHeartbeatOnce().catch(() => { /* 即时心跳失败不影响登录流程 */ })

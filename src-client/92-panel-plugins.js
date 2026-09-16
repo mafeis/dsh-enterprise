@@ -4,6 +4,7 @@
 			"market.title": { zh: "企业插件市场", en: "Enterprise Plugin Market" },
 			"market.subtitle": { zh: "企业管理员精选的插件，点击即可安装到本机（走企业配置的安装源）。清单外插件安装会被拦截。", en: "Plugins curated by your enterprise admin. Click to install (via the enterprise-configured registry). Plugins outside the allowlist are blocked." },
 			"market.violations": { zh: "检测到 {n} 个允许清单之外的插件：{list}。已上报管理台，请联系管理员处理。", en: "Detected {n} plugin(s) outside the allowlist: {list}. Reported to the admin console; contact your administrator." },
+			"market.violationsWarn": { zh: "检测到 {n} 个允许清单之外的插件：{list}。仅警告，未做处理。", en: "Detected {n} plugin(s) outside the allowlist: {list}. Warning only — no action taken." },
 			"market.none": { zh: "管理员未配置可安装插件清单", en: "No installable plugin list configured by the administrator" },
 			"market.other": { zh: "其他插件", en: "Other Plugins" },
 			"market.unrestricted": { zh: "未设置白名单限制", en: "No allowlist restriction" },
@@ -88,7 +89,9 @@
 			return reactJsx.jsxs("div", { style: UI.page, children: [
 				reactJsx.jsx("h3", { style: UI.h3First("#2563eb"), children: t("market.title") }),
 				reactJsx.jsx("p", { style: Object.assign({}, UI.dim, { margin: "0 0 10px" }), children: t("market.subtitle") }),
-				violations.length > 0 ? UI.alertBar(t("market.violations", { n: violations.length, list: violations.join("、") })) : null,
+				violations.length > 0 && g.enforceMode !== "off"
+					? UI.alertBar(t(g.enforceMode === "warn" ? "market.violationsWarn" : "market.violations", { n: violations.length, list: violations.join("、") }))
+					: null,
 				pendingRestart ? UI.alertBar(t("market.removedRestart", { list: (pendingRestart.names || []).join("、") })) : null,
 				installMsg ? reactJsx.jsx("div", { style: { marginBottom: 10, fontSize: 13, color: installMsg.startsWith("✗") ? "#dc2626" : "#059669" }, children: installMsg }) : null,
 
@@ -102,7 +105,7 @@
 									it.installed ? UI.okBadge(t("market.installed")) : null
 								] }),
 								(() => {
-									const desc = loc === "zh" ? (it.descriptionZh || it.description) : (it.description || it.descriptionZh);
+									const desc = loc === "zh" ? (it.descriptionZh || it.description || it.descriptionEn) : (it.descriptionEn || it.descriptionZh || it.description);
 									return desc
 										? reactJsx.jsx("div", { style: Object.assign({}, UI.dim, { flex: 1, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }), children: desc })
 										: reactJsx.jsx("div", { style: Object.assign({}, UI.dim, { flex: 1 }), children: t("market.noDesc") });
@@ -127,7 +130,7 @@
 					g.installedUnknown
 						? reactJsx.jsx("div", { style: UI.dim, children: t("market.unreadable") })
 						: installed.length
-							? reactJsx.jsx("div", { children: installed.map((x) => violations.includes(x) ? UI.badBadge(x) : UI.okBadge(x)) })
+							? reactJsx.jsx("div", { children: installed.map((x) => (violations.includes(x) && g.enforceMode !== "off") ? UI.badBadge(x) : UI.okBadge(x)) })
 							: reactJsx.jsx("div", { style: UI.dim, children: t("market.noneInstalled") })
 				] })
 			] });
