@@ -57,7 +57,11 @@ async function ackPolicyIfNeeded() {
 /** ============ 企业自建插件源（pluginRegistry） ============ */
 /** 把用户输入的包名解析成本源安装地址。返回 { ok, spec, source, error }
  *  proxy 模式 → { registry }（配 pnpm --registry）
- *  url 模式   → { spec }（<prefix><name> 直接作为包 spec）
+ *  url 模式   → 把 <prefix><name> 的 tgz 下载到 profile 内固定缓存位（.ent-plugin-cache/<name>.tgz），
+ *               返回 { spec: 'file:<缓存包>' }。直接把 http URL 喂给 pnpm 会让 lockfile 缺
+ *               integrity 字段（ERR_PNPM_MISSING_TARBALL_INTEGRITY），之后该包任何 pnpm 操作都被拒；
+ *               file: 安装 pnpm 会算 integrity。缓存放 profile 内（而非系统 Temp）：
+ *               deps 指向的文件必须长期存在，否则 temp 清理后下次 pnpm 操作直接 ENOENT。
  *  off        → 默认社区源原样
  */
 export async function resolvePluginInstallSpec(packageName) {
@@ -70,9 +74,22 @@ export async function resolvePluginInstallSpec(packageName) {
     if (!reg.npmRegistryUrl) return { ok: false, error: '企业源未配置 npmRegistryUrl（联系管理员）' }
     return { ok: true, spec: name, registry: reg.npmRegistryUrl.replace(/\/$/, ''), source: 'proxy' }
   }
-  // url 模式：前缀拼包名（如 http://plugins.corp.local/pkg/<name>）
+  // url 模式：前缀拼包名 → 下载 tgz → profile 内缓存 → file: 安装
   if (!reg.packagePrefix) return { ok: false, error: '企业源未配置 packagePrefix（联系管理员）' }
-  return { ok: true, spec: reg.packagePrefix.replace(/\/$/, '') + '/' + name, source: 'url' }
+  const url = reg.packagePrefix.replace(/\/$/, '') + '/' + name
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(30000) })
+    if (!r.ok) return { ok: false, error: `企业源拉取失败 ${r.status}：${url}` }
+    const buf = Buffer.from(await r.arrayBuffer())
+    const cacheDir = join(findProfileRoot() ?? dshHome(), '.ent-plugin-cache')
+    const { mkdir, writeFile } = await import('node:fs/promises')
+    await mkdir(cacheDir, { recursive: true })
+    const file = join(cacheDir, `${name.replace('/', '-')}.tgz`)   // 固定名：同包重装即覆盖，deps 引用恒定
+    await writeFile(file, buf)
+    return { ok: true, spec: `file:${file}`, source: 'url' }
+  } catch (e) {
+    return { ok: false, error: `企业源下载失败：${String(e?.message ?? e).slice(0, 160)}` }
+  }
 }
 
 /** 读取 profile 根目录（插件自身位置向上找含 dsh.profile.bundles 的 package.json） */
