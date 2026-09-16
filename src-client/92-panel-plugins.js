@@ -39,6 +39,10 @@
 				apiGet("/api/enterprise/market").then((r) => { if (alive) setMarket(r); }).catch(() => { if (alive) setMarket({ ok: false, items: [] }); });
 				return () => { alive = false; };
 			}, []);
+			/** 安装/卸载后重拉市场清单，卡片「已安装」徽章跟着真实状态走 */
+			const refreshMarket = () => {
+				apiGet("/api/enterprise/market").then((r) => setMarket(r)).catch(() => { });
+			};
 			if (!status) return reactJsx.jsx(UI.skeleton, { lines: 3 });
 			const g = status.pluginGovernance;
 			if (!g) return UI.alertBar(t("market.controlDesc"));
@@ -58,6 +62,7 @@
 							: t("market.okRestart");
 						setInstallMsg("✓ " + name + "：" + note);
 						statusStoreRefresh();
+						refreshMarket();
 					} else setInstallMsg("✗ " + name + "：" + (res.error || "install failed"));
 				} catch (e) { setInstallMsg("✗ " + name + "：" + (e && e.message ? e.message : e)); }
 				setInstalling("");
@@ -70,6 +75,7 @@
 					if (res.ok) {
 						setInstallMsg("✓ " + name + "：" + t("market.uninstallOk"));
 						statusStoreRefresh();
+						refreshMarket();
 					} else setInstallMsg("✗ " + name + "：" + (res.error || "uninstall failed"));
 				} catch (e) { setInstallMsg("✗ " + name + "：" + (e && e.message ? e.message : e)); }
 				setUninstalling("");
