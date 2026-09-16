@@ -21,8 +21,13 @@
 				// 登录遮罩热挂载：账号被网关停用/凭证被吊销时，插件心跳自动清场（configured 变 false），
 				// 这里轮询发现后立即弹出全屏登录遮罩锁定操作。5s 轮询（原 30s：清场后遮罩要等很久才弹，
 				// 手动点"立即检测"看到未登录提示后迟迟不弹框）。已挂出则跳过，开销可忽略。
-				const overlayWatch = setInterval(async () => { void checkOverlay(); }, 5000);
+				// 同一轮询顺带检查异常插件处置遮罩（清单外插件被自动卸载 → 全屏锁定要求重启）
+				const overlayWatch = setInterval(() => {
+					void checkOverlay();
+					void checkViolationOverlay();
+				}, 5000);
 				cleanups.push(() => clearInterval(overlayWatch));
+				void checkViolationOverlay();
 				// 供其他模块在关键动作（立即检测/登出）后立即触发遮罩检查，不等下一轮轮询
 				window.__enterpriseCheckOverlay = checkOverlay;
 				cleanups.push(() => { delete window.__enterpriseCheckOverlay; });
