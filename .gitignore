@@ -6,3 +6,7 @@ lib/
 # 日志与临时文件
 *.log
 *.tmp-*
+
+# 部署与安装脚本（不入库）
+deploy/
+install/
