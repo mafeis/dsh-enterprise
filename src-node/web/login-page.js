@@ -40,16 +40,16 @@ const I18N = {
   btn: ['登录并自动配置', 'Sign in & auto-configure'],
   signingIn: ['登录中…', 'Signing in…'],
   configured: ['已配置 ✓', 'Configured ✓'],
-  okModels: ['✓ 登录成功，已自动配置企业模型：', '✓ Signed in. Enterprise models configured: '],
+  okModels: ['✓ 登录成功，模型已就绪', '✓ Signed in, models ready'],
   okBack: ['回到 DSH 对话框即可直接使用。', 'Back in the DSH chat, ready to use.'],
   fail: ['登录失败', 'Sign-in failed'],
   netErr: ['网络错误：', 'Network error: '],
-  current: ['当前已配置：', 'Currently configured: '],
+  current: ['✓ 已登录，模型已就绪', '✓ Signed in, models ready'],
 };
 if (EN) {
   document.documentElement.lang = 'en';
   document.title = I18N.title[1];
-  $('h2') && ($('h2').textContent = I18N.h2[1]);
+  document.querySelector('h2') && (document.querySelector('h2').textContent = I18N.h2[1]);
   document.querySelector('.sub').textContent = I18N.sub[1];
   $('server').placeholder = I18N.server[1];
   $('user').placeholder = I18N.user[1];
@@ -64,13 +64,13 @@ $('btn').onclick = async () => {
       body: JSON.stringify({ server: $('server').value.trim() || undefined, username: $('user').value.trim(), password: $('pass').value }) });
     const b = await r.json();
     if (b.ok) {
-      $('ok').innerHTML = t('okModels') + b.models.join('、') + '<br>' + (EN ? 'Back in the DSH chat, ready to use.' : '回到 DSH 对话框即可直接使用。');
+      $('ok').innerHTML = t('okModels') + '<br>' + (EN ? 'Back in the DSH chat, ready to use.' : '回到 DSH 对话框即可直接使用。');
       btn.textContent = t('configured');
     } else { $('err').textContent = b.error || t('fail'); btn.textContent = t('btn'); }
   } catch (e) { $('err').textContent = t('netErr') + e.message; btn.textContent = t('btn'); }
   btn.disabled = false;
 };
 $('pass').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn').click(); });
-(async () => { try { const s = await (await fetch('/api/enterprise/status')).json(); if (s.gateway || s.factoryGateway) { $('server').value = s.gateway || s.factoryGateway; } if (s.configured) { $('ok').textContent = t('current') + (s.models || []).join('、'); } } catch {} })();
+(async () => { try { const s = await (await fetch('/api/enterprise/status')).json(); if (s.gateway || s.factoryGateway) { $('server').value = s.gateway || s.factoryGateway; } if (s.configured) { $('ok').textContent = t('current'); } } catch {} })();
 </script>
 </body></html>`
