@@ -176,7 +176,15 @@ node test/test-enforce.mjs            # End-to-end smoke test
 ## 🔗 Related / 相关项目
 
 - [dsh-enterprise-gateway](https://github.com/mafeis/dsh-enterprise-gateway) — 企业网关服务端 · Enterprise gateway server (this plugin pairs with it · 插件与之配对使用)
-- [DSH Desktop](https://github.com/anywhere-labs/dsh-desktop) — 本插件所运行的桌面客户端 · The desktop client this plugin runs on
+
+## 🤝 友情链接 / Friend Links
+
+收录 DSH 生态相关项目。
+
+| 项目 | 简介 | 链接 |
+| --- | --- | --- |
+| DSH Desktop | 基于 DeepSeek Harness 构建的开源桌面客户端，本插件随其一同分发与运行。 | [GitHub](https://github.com/anywhere-labs/dsh-desktop) · [官网](https://dshdesktop.cn) |
+| DeepSeek Harness | 上游核心智能体与插件系统。 | [GitHub](https://github.com/deepseek-ai/deepseek-harness) |
 
 ## 🙏 致谢 / Acknowledgements
 
