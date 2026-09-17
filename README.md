@@ -184,7 +184,7 @@ node test/test-enforce.mjs            # End-to-end smoke test
 | 项目 | 简介 | 链接 |
 | --- | --- | --- |
 | DSH Desktop | 基于 DeepSeek Harness 构建的开源桌面客户端，本插件随其一同分发与运行。 | [GitHub](https://github.com/anywhere-labs/dsh-desktop) · [官网](https://dshdesktop.cn) |
-| DeepSeek Harness | 上游核心智能体与插件系统。 | [GitHub](https://github.com/deepseek-ai/deepseek-harness) |
+| DeepSeek Harness | DSH 官方上游：核心智能体、插件系统与 Web UI。 | [GitHub](https://github.com/deepseek-ai/deepseek-harness) · [DeepSeek 官网](https://www.deepseek.com) |
 
 ## 🙏 致谢 / Acknowledgements
 
