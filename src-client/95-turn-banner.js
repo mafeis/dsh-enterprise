@@ -32,23 +32,23 @@
 					: cfg.position === "top-left" ? "top:" + px(cfg.top, "14px") + ";left:" + px(cfg.left, "18px") + ";"
 						: "top:" + px(cfg.top, "14px") + ";right:" + px(cfg.right, "18px") + ";";   // 默认 top-right
 			// 颜色不跟随网关全局配置：公告=蓝、拦截=红、提醒=橙，三种语义固定区分，避免同色混淆
-			const cMain = isNotice ? "#1d4ed8" : blocked ? "#b91c1c" : "#9a3412";
-			const cBg = isNotice ? "#eff6ff" : blocked ? "#fef2f2" : "#fff7ed";
-			const cBorder = isNotice ? "#3b82f6" : blocked ? "#ef4444" : "#fb923c";
+			const cMain = isNotice ? "var(--ent-notice)" : blocked ? "var(--ent-bad-strong)" : "var(--ent-warn)";
+			const cBg = isNotice ? "var(--ent-notice-tint)" : blocked ? "var(--ent-bad-tint)" : "var(--ent-warn-tint)";
+			const cBorder = isNotice ? "var(--ent-notice-line)" : blocked ? "var(--ent-bad-line)" : "var(--ent-warn-line)";
 			const el = document.createElement("div");
 			el.setAttribute("data-enterprise-banner", "1");
 			el.style.cssText = "position:fixed;" + pos + "z-index:2147483000;"
 				+ "max-width:" + px(cfg.maxWidth, isNotice ? "460px" : "420px") + ";"
 				+ "padding:11px 40px 11px 16px;border-radius:10px;"
 				+ "background:" + cBg + ";border:1.5px solid " + cBorder + ";"
-				+ "box-shadow:0 10px 34px rgba(0,0,0,.16);font-family:inherit;font-size:13.5px;line-height:1.55;color:#1f2937";
+				+ "box-shadow:var(--ent-shadow-soft);font-family:inherit;font-size:13.5px;line-height:1.55;color:var(--ent-fg)";
 			const btn = document.createElement("button");
 			btn.textContent = "×";
 			btn.title = t2("关闭", "Close");
 			btn.style.cssText = "position:absolute;top:8px;right:10px;border:none;background:transparent;cursor:pointer;"
-				+ "font-size:16px;line-height:1;padding:2px 4px;color:#9ca3af";
-			btn.onmouseenter = () => { btn.style.color = "#374151"; };
-			btn.onmouseleave = () => { btn.style.color = "#9ca3af"; };
+				+ "font-size:16px;line-height:1;padding:2px 4px;color:var(--ent-close)";
+			btn.onmouseenter = () => { btn.style.color = "var(--ent-close-hover)"; };
+			btn.onmouseleave = () => { btn.style.color = "var(--ent-close)"; };
 			btn.onclick = () => entBannerRemove();
 			// 公告：蓝色信息条，单行（图标 + 正文），与提醒/拦截同构
 			if (isNotice) {

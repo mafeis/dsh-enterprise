@@ -17,14 +17,14 @@
 			if (err) return UI.alertBar(err);
 			if (!policy) return reactJsx.jsx(UI.skeleton, { lines: 4 });
 			// /policy/current 顶层即策略字段（version/lockModelConfig/... + auditLevel/dlpEnabled）
-			const row = (label, value, warn) => reactJsx.jsxs("div", { style: { display: "flex", justifyContent: "space-between", gap: 16, padding: "8px 0", borderBottom: "1px solid #f0f2f7", fontSize: 13 }, children: [
-				reactJsx.jsx("span", { style: { color: "#6b7280", flexShrink: 0 }, children: label }),
-				reactJsx.jsx("span", { style: { fontWeight: 500, color: warn ? "#b91c1c" : "#1f2937", textAlign: "right" }, children: value })
+			const row = (label, value, warn) => reactJsx.jsxs("div", { style: { display: "flex", justifyContent: "space-between", gap: 16, padding: "8px 0", borderBottom: "1px solid var(--ent-line-soft)", fontSize: 13 }, children: [
+				reactJsx.jsx("span", { style: { color: "var(--ent-fg-2)", flexShrink: 0 }, children: label }),
+				reactJsx.jsx("span", { style: { fontWeight: 500, color: warn ? "var(--ent-bad-strong)" : "var(--ent-fg)", textAlign: "right" }, children: value })
 			] });
 			// DLP 规则数由网关 /policy/current 的 dlpRuleCount 下发（明细规则不下发到终端）
 			return reactJsx.jsxs("div", { style: UI.page, children: [
 				reactJsx.jsx(ClientRulesSection, {}),
-				reactJsx.jsx("h3", { style: UI.h3("#2563eb"), children: t("企业管控规则（网关下发）", "Enterprise policies (gateway-deployed)") }),
+				reactJsx.jsx("h3", { style: UI.h3(), children: t("企业管控规则（网关下发）", "Enterprise policies (gateway-deployed)") }),
 				reactJsx.jsx("p", { style: Object.assign({}, UI.dim, { margin: "0 0 10px" }), children:
 					t("企业管理员在网关管理台下发的安全与管控策略（只读，随心跳自动更新）。", "Security and control policies deployed by the admin in the gateway console (read-only, auto-updated)") }),
 				reactJsx.jsx("div", { style: Object.assign({}, UI.card, { padding: "4px 14px" }), children: [
@@ -68,22 +68,22 @@
 			for (const r of rules) byType[r.type] = (byType[r.type] ?? 0) + 1;
 			const typeLabel = { "block-url": t("网址拦截", "URL block"), "block-word": t("关键词拦截", "Keyword block"), "block-plugin": t("插件拦截", "Plugin block"), "force-default-model": t("强制默认模型", "Force default model"), "notice": t("公告提示", "Notice") };
 			return reactJsx.jsxs("div", { children: [
-				reactJsx.jsx("h3", { style: UI.h3First("#2563eb"), children: t("本机执行规则", "Local rules") }),
+				reactJsx.jsx("h3", { style: UI.h3First(), children: t("本机执行规则", "Local rules") }),
 				reactJsx.jsx("p", { style: Object.assign({}, UI.dim, { margin: "0 0 10px" }), children:
 					t("企业管理员统一下发的安全规则，在本机强制执行（规则明细不在终端展示）。", "Security rules deployed by the admin, enforced on this client (details not shown)") }),
 				// 总量统计卡：几个数字，一眼看清
 				reactJsx.jsx("div", { style: UI.card, children: reactJsx.jsxs("div", { style: { display: "flex", gap: 28, flexWrap: "wrap" }, children: [
 					reactJsx.jsxs("div", { children: [
-						reactJsx.jsx("div", { style: { fontSize: 11.5, color: "#94a3b8" }, children: t("生效规则", "Active rules") }),
-						reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: "#1f2937" }, UI.num), children: rules.length + t(" 条", " rules") })
+						reactJsx.jsx("div", { style: { fontSize: 11.5, color: "var(--ent-fg-3)" }, children: t("生效规则", "Active rules") }),
+						reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: "var(--ent-fg)" }, UI.num), children: rules.length + t(" 条", " rules") })
 					] }),
 					...Object.entries(byType).map(([ty, n]) => reactJsx.jsxs("div", { children: [
-						reactJsx.jsx("div", { style: { fontSize: 11.5, color: "#94a3b8" }, children: typeLabel[ty] || ty }),
-						reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: "#1f2937" }, UI.num), children: n + t(" 条", " rules") })
+						reactJsx.jsx("div", { style: { fontSize: 11.5, color: "var(--ent-fg-3)" }, children: typeLabel[ty] || ty }),
+						reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: "var(--ent-fg)" }, UI.num), children: n + t(" 条", " rules") })
 					] }, ty)),
 					reactJsx.jsxs("div", { children: [
-						reactJsx.jsx("div", { style: { fontSize: 11.5, color: "#94a3b8" }, children: t("本会话拦截", "Blocked this session") }),
-						reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: (runs?.blocked ?? 0) > 0 ? "#dc2626" : "#1f2937" }, UI.num), children: (runs?.blocked ?? 0) + t(" 次", " times") })
+						reactJsx.jsx("div", { style: { fontSize: 11.5, color: "var(--ent-fg-3)" }, children: t("本会话拦截", "Blocked this session") }),
+						reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: (runs?.blocked ?? 0) > 0 ? "var(--ent-bad)" : "var(--ent-fg)" }, UI.num), children: (runs?.blocked ?? 0) + t(" 次", " times") })
 					] })
 				] }) }),
 				// 高风险操作提醒（rm -rf / 格式化 / fork炸弹 等）：命中过就置顶红条常驻提示
@@ -109,9 +109,9 @@
 								reactJsx.jsx("th", { style: UI.cellHead, children: t("详情", "Detail") })
 							] }) }),
 							reactJsx.jsx("tbody", { children: hits.slice(0, 20).map((h, i) => reactJsx.jsxs("tr", { children: [
-								reactJsx.jsx("td", { style: Object.assign({}, UI.cell, { color: "#6b7280" }), children: new Date(h.at).toLocaleTimeString(undefined) }),
+								reactJsx.jsx("td", { style: Object.assign({}, UI.cell, { color: "var(--ent-fg-2)" }), children: new Date(h.at).toLocaleTimeString(undefined) }),
 								reactJsx.jsx("td", { style: UI.cell, children: h.risk === "high"
-									? UI.badBadge(t("高危", "High risk"), "rgba(220,38,38,.14)", "#dc2626")
+									? UI.badBadge(t("高危", "High risk"), "var(--ent-bad-soft)", "var(--ent-bad)")
 									: UI.infoBadge(h.kind === "search" ? t("搜索过滤", "Search filter") : h.kind === "word" ? t("关键词", "Keyword") : t("网址", "URL")) }),
 								reactJsx.jsx("td", { style: Object.assign({}, UI.cell, { maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis" }), title: h.detail, children: h.detail })
 							] }, i)) })
@@ -123,7 +123,7 @@
 						reactJsx.jsx("input", { value: checkUrl, placeholder: "https://example.com", onChange: (e) => setCheckUrl(e.target.value), style: Object.assign({}, UI.input, { marginBottom: 0, flex: 1 }) }),
 						reactJsx.jsx("button", { style: UI.btn, onClick: doCheck, children: t("检测", "Check") })
 					] }),
-					checkMsg && reactJsx.jsx("div", { style: { marginTop: 8, fontSize: 13, color: checkMsg.ok ? "#059669" : "#dc2626" }, children: checkMsg.text })
+					checkMsg && reactJsx.jsx("div", { style: { marginTop: 8, fontSize: 13, color: checkMsg.ok ? "var(--ent-ok)" : "var(--ent-bad)" }, children: checkMsg.text })
 				] }) : null
 			] });
 		}

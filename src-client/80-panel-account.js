@@ -30,13 +30,13 @@
 			if (!status) return reactJsx.jsx(UI.skeleton, { lines: 4 });
 
 			return reactJsx.jsxs("div", { style: UI.page, children: [
-				reactJsx.jsx("h3", { style: UI.h3First("#2563eb"), children: t("登录状态", "Login status") }),
+				reactJsx.jsx("h3", { style: UI.h3First(), children: t("登录状态", "Login status") }),
 				reactJsx.jsxs("div", { style: UI.card, children: [
 					reactJsx.jsxs("div", { style: UI.row, children: [
 						reactJsx.jsx("span", { style: UI.label, children: t("账号状态", "Account status") }),
 						status.configured
-							? UI.dot("#059669", reactJsx.jsx("span", { style: { fontWeight: 600, color: "#059669" }, children: status.user || t("已配置", "Configured") }))
-							: UI.dot("#dc2626", reactJsx.jsx("span", { style: { fontWeight: 600, color: "#dc2626" }, children: t("未登录", "Not signed in") }))
+							? UI.dot("var(--ent-ok)", reactJsx.jsx("span", { style: { fontWeight: 600, color: "var(--ent-ok)" }, children: status.user || t("已配置", "Configured") }))
+							: UI.dot("var(--ent-bad)", reactJsx.jsx("span", { style: { fontWeight: 600, color: "var(--ent-bad)" }, children: t("未登录", "Not signed in") }))
 					] }),
 					reactJsx.jsxs("div", { style: UI.row, children: [
 						reactJsx.jsx("span", { style: UI.label, children: t("网关地址", "Gateway URL") }),
@@ -46,8 +46,8 @@
 						const hb = status.heartbeat || {};
 						let node;
 						if (!hb.lastAt) node = reactJsx.jsx("span", { style: UI.dim, children: t("尚未发送过心跳", "No heartbeat yet") });
-					else if (hb.lastOk) node = UI.dot("#059669", t("在线", "Online") + " · " + new Date(hb.lastAt).toLocaleTimeString(undefined) + " · " + hb.lastLatencyMs + "ms");
-					else node = UI.dot("#dc2626", t("离线", "Offline") + " · " + new Date(hb.lastAt).toLocaleTimeString(undefined) + " · " + (hb.lastError || t("无响应", "No response")));
+					else if (hb.lastOk) node = UI.dot("var(--ent-ok)", t("在线", "Online") + " · " + new Date(hb.lastAt).toLocaleTimeString(undefined) + " · " + hb.lastLatencyMs + "ms");
+					else node = UI.dot("var(--ent-bad)", t("离线", "Offline") + " · " + new Date(hb.lastAt).toLocaleTimeString(undefined) + " · " + (hb.lastError || t("无响应", "No response")));
 						return reactJsx.jsxs("div", { style: UI.row, children: [
 							reactJsx.jsx("span", { style: UI.label, children: t("在线心跳", "Heartbeat") }),
 							node
@@ -57,7 +57,7 @@
 
 				// 心跳设置不暴露给用户：心跳开关/间隔由网关统一管理下发（客户端仅显示上方在线状态）
 
-				reactJsx.jsx("h3", { style: UI.h3("#2563eb"), children: t("操作", "Actions") }),
+				reactJsx.jsx("h3", { style: UI.h3(), children: t("操作", "Actions") }),
 				reactJsx.jsxs("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", margin: "8px 0" }, children: [
 					reactJsx.jsx("button", { style: Object.assign({}, UI.btn, UI.btnPrimary), disabled: busy !== "", onClick: () => { setShowRelogin(!showRelogin); setMsg(""); }, children: t("重新登录", "Sign in again") }),
 					reactJsx.jsx("button", { style: UI.btn, disabled: busy !== "", onClick: () => act("repair", () => apiPost("/api/enterprise/repair"), t("✓ 已按当前凭证重新配置 provider", "✓ Provider reconfigured")), children: busy === "repair" ? t("配置中…", "Configuring…") : t("一键配置 Provider", "One-click provider setup") }),
@@ -73,7 +73,7 @@
 					}, children: busy === "logout" ? t("退出中…", "Signing out…") : t("退出登录", "Sign out") })
 				] }),
 
-				showRelogin && reactJsx.jsxs("div", { style: { border: "1px solid #e6eaf1", borderRadius: 10, padding: "14px 16px", margin: "8px 0", background: "#fbfcfe" }, children: [
+				showRelogin && reactJsx.jsxs("div", { style: { border: "1px solid var(--ent-line)", borderRadius: 10, padding: "14px 16px", margin: "8px 0", background: "var(--ent-surface)" }, children: [
 					reactJsx.jsx("input", { placeholder: t("网关地址", "Gateway URL"), value: server, onChange: (e) => setServer(e.target.value), style: UI.input }),
 					reactJsx.jsx("input", { placeholder: t("账号", "Account"), value: user, onChange: (e) => setUser(e.target.value), style: UI.input }),
 					reactJsx.jsx("input", { placeholder: t("密码", "Password"), type: "password", value: pass, onChange: (e) => setPass(e.target.value), style: UI.input }),

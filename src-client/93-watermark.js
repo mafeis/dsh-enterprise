@@ -6,8 +6,8 @@
 
 		const __entWatermark = { el: null, on: false, user: "", mo: null, timer: null, device: "", style: null };
 
-		// 样式默认值（管理台 watermarkStyle 可覆盖）
-		const WM_STYLE_DEFAULTS = { template: "{user} · {time}", color: "#0f172a", opacity: 0.06, fontSize: 13, gapX: 260, gapY: 150, angle: -22 };
+		// 样式默认值（管理台 watermarkStyle 可覆盖）；默认色走主题令牌：深色下自动转白，浅色保持深色
+		const WM_STYLE_DEFAULTS = { template: "{user} · {time}", color: "var(--ent-wm-color)", opacity: 0.06, fontSize: 13, gapX: 260, gapY: 150, angle: -22 };
 
 		function wmStyle() {
 			return Object.assign({}, WM_STYLE_DEFAULTS, __entWatermark.style && typeof __entWatermark.style === "object" ? __entWatermark.style : {});

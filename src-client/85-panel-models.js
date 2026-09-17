@@ -26,7 +26,7 @@
 			const models = modelsInfo.models || [];
 			const defaultModel = status?.defaultModel;
 			return reactJsx.jsxs("div", { style: UI.page, children: [
-				reactJsx.jsx("h3", { style: UI.h3First("#2563eb"), children: t("企业模型", "Enterprise models") }),
+				reactJsx.jsx("h3", { style: UI.h3First(), children: t("企业模型", "Enterprise models") }),
 				!models.length
 					? UI.alertBar(t("未获取到模型目录（网关不可达且无本地缓存），请联系企业管理员确认模型上架状态。", "Model catalog unavailable (gateway unreachable and no local cache); contact your enterprise admin"))
 					: reactJsx.jsxs("div", { children: [
@@ -36,9 +36,9 @@
 							const isDefault = m.id === defaultModel;
 							const displayName = m.name && m.name !== m.id ? m.name : null;
 							const modes = mmBadges(m, t);
-							return reactJsx.jsxs("div", { style: Object.assign({}, UI.card, isDefault ? { borderColor: "#a7f3d0", background: "#f6fdf9" } : null), children: [
+							return reactJsx.jsxs("div", { style: Object.assign({}, UI.card, isDefault ? { borderColor: "var(--ent-ok-line)", background: "var(--ent-ok-tint)" } : null), children: [
 								reactJsx.jsxs("div", { style: { display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }, children: [
-									reactJsx.jsx("span", { style: { fontWeight: 600, fontSize: 13.5, color: "#1f2937" }, children: displayName || m.id }),
+									reactJsx.jsx("span", { style: { fontWeight: 600, fontSize: 13.5, color: "var(--ent-fg)" }, children: displayName || m.id }),
 									displayName ? reactJsx.jsx("span", { style: UI.mono, children: m.id }) : null,
 									isDefault ? UI.okBadge(t("默认", "Default")) : null
 								] }),

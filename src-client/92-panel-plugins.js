@@ -87,13 +87,13 @@
 			const unrestricted = Array.isArray(items) && market.ok === true && items.length === 0 && !g.allowedUnknown;
 
 			return reactJsx.jsxs("div", { style: UI.page, children: [
-				reactJsx.jsx("h3", { style: UI.h3First("#2563eb"), children: t("market.title") }),
+				reactJsx.jsx("h3", { style: UI.h3First(), children: t("market.title") }),
 				reactJsx.jsx("p", { style: Object.assign({}, UI.dim, { margin: "0 0 10px" }), children: t("market.subtitle") }),
 				violations.length > 0 && g.enforceMode !== "off"
 					? UI.alertBar(t(g.enforceMode === "warn" ? "market.violationsWarn" : "market.violations", { n: violations.length, list: violations.join("、") }))
 					: null,
 				pendingRestart ? UI.alertBar(t("market.removedRestart", { list: (pendingRestart.names || []).join("、") })) : null,
-				installMsg ? reactJsx.jsx("div", { style: { marginBottom: 10, fontSize: 13, color: installMsg.startsWith("✗") ? "#dc2626" : "#059669" }, children: installMsg }) : null,
+				installMsg ? reactJsx.jsx("div", { style: { marginBottom: 10, fontSize: 13, color: installMsg.startsWith("✗") ? "var(--ent-bad)" : "var(--ent-ok)" }, children: installMsg }) : null,
 
 				!items
 					? reactJsx.jsx(UI.skeleton, { lines: 3 })

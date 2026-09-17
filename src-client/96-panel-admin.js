@@ -29,20 +29,20 @@
 					style: {
 						padding: "8px 15px", fontSize: 13, fontFamily: "inherit", cursor: "pointer",
 						border: "none", background: "transparent", marginBottom: -1,
-						color: active ? "#2563eb" : "#6b7280",
+						color: active ? "var(--ent-accent)" : "var(--ent-fg-2)",
 						fontWeight: active ? 600 : 400,
-						borderBottom: active ? "2px solid #2563eb" : "2px solid transparent",
+						borderBottom: active ? "2px solid var(--ent-accent)" : "2px solid transparent",
 						display: "inline-flex", alignItems: "center", gap: 6
 					},
 					onClick: () => selectTab(tb.id),
 					children: [
 						tb.label,
-						tb.alert ? reactJsx.jsx("span", { style: { width: 7, height: 7, borderRadius: "50%", background: "#dc2626", display: "inline-block" } }) : null
+						tb.alert ? reactJsx.jsx("span", { style: { width: 7, height: 7, borderRadius: "50%", background: "var(--ent-bad)", display: "inline-block" } }) : null
 					]
 				});
 			});
 			return reactJsx.jsxs("div", { children: [
-				reactJsx.jsx("div", { style: { display: "flex", gap: 2, borderBottom: "1px solid #e6eaf1", margin: "0 0 14px", flexWrap: "wrap" }, children: tabBtns }),
+				reactJsx.jsx("div", { style: { display: "flex", gap: 2, borderBottom: "1px solid var(--ent-line)", margin: "0 0 14px", flexWrap: "wrap" }, children: tabBtns }),
 				reactJsx.jsx(Active, {})
 			] });
 		}

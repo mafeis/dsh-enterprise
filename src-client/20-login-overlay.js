@@ -17,18 +17,20 @@
 #enterprise-overlay { position: fixed; inset: 0; z-index: 2147483000; background: rgba(15,23,42,.55);
   display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);
   font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; }
-#enterprise-overlay .box { background: #fff; border-radius: 14px; padding: 30px 32px; width: min(380px, 92vw);
-  box-shadow: 0 24px 70px rgba(0,0,0,.28); color: #1f2937; font-size: 14px; line-height: 1.7; }
-#enterprise-overlay h2 { font-size: 18px; margin: 0 0 4px; }
-#enterprise-overlay .sub { font-size: 12.5px; color: #6b7280; margin-bottom: 18px; }
-#enterprise-overlay input { width: 100%; border: 1px solid #e6eaf1; border-radius: 9px; padding: 9px 13px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none; transition: border .15s; box-sizing: border-box; }
-#enterprise-overlay input:focus { border-color: #2563eb; }
+body[data-ds-dark-theme] #enterprise-overlay { background: rgba(0,0,0,.62); }
+#enterprise-overlay .box { background: var(--ent-box); border: 1px solid var(--ent-line); border-radius: 14px; padding: 30px 32px; width: min(380px, 92vw);
+  box-shadow: var(--ent-shadow); color: var(--ent-fg); font-size: 14px; line-height: 1.7; }
+#enterprise-overlay h2 { font-size: 18px; margin: 0 0 4px; color: var(--ent-fg); }
+#enterprise-overlay .sub { font-size: 12.5px; color: var(--ent-fg-2); margin-bottom: 18px; }
+#enterprise-overlay input { width: 100%; border: 1px solid var(--ent-line); border-radius: 9px; padding: 9px 13px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none; transition: border .15s; box-sizing: border-box; background: var(--ent-input-bg); color: var(--ent-fg); }
+#enterprise-overlay input::placeholder { color: var(--ent-fg-3); opacity: 1; }
+#enterprise-overlay input:focus { border-color: var(--ent-accent); }
 #enterprise-overlay button { width: 100%; padding: 10px; font-size: 14px; border: none; border-radius: 9px;
-  background: #2563eb; color: #fff; cursor: pointer; font-family: inherit; }
+  background: var(--ent-accent); color: var(--ent-accent-ink); cursor: pointer; font-family: inherit; }
 #enterprise-overlay button:disabled { opacity: .6; cursor: default; }
-#enterprise-overlay .err { color: #dc2626; font-size: 12.5px; min-height: 20px; margin-bottom: 6px; }
-#enterprise-overlay .ok { color: #059669; font-size: 13px; min-height: 18px; }
-#enterprise-overlay .lockhint { margin-top: 10px; text-align: center; font-size: 12px; color: #94a3b8; }
+#enterprise-overlay .err { color: var(--ent-bad); font-size: 12.5px; min-height: 20px; margin-bottom: 6px; }
+#enterprise-overlay .ok { color: var(--ent-ok); font-size: 13px; min-height: 18px; }
+#enterprise-overlay .lockhint { margin-top: 10px; text-align: center; font-size: 12px; color: var(--ent-fg-3); }
 </style>
 <div class="box">
   <h2>${t2("企业账号登录", "Enterprise sign-in")}</h2>

@@ -3,18 +3,23 @@ export const LOGIN_PAGE_HTML = `<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>企业账号登录 · DSH</title>
 <style>
-:root { --bg:#f4f6fa; --card:#fff; --line:#e6eaf1; --txt:#1f2937; --dim:#6b7280; --accent:#2563eb; --bad:#dc2626; }
+:root { --bg:#f4f6fa; --card:#fff; --line:#e6eaf1; --txt:#1f2937; --dim:#6b7280; --hint:#94a3b8; --accent:#2563eb; --accent-ink:#fff; --bad:#dc2626; --ok:#059669; --input-bg:#fff; --shadow:rgba(0,0,0,.18); }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#111216; --card:#232429; --line:rgba(255,255,255,.14); --txt:#e9edf3; --dim:#b9bfc7; --hint:#979da6; --accent:#6ba4ff; --accent-ink:#10131a; --bad:#f25a5a; --ok:#4ed17e; --input-bg:rgba(255,255,255,.07); --shadow:rgba(0,0,0,.55); }
+  html { color-scheme: dark; }
+}
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--txt); font-size:14px; line-height:1.7; display:flex; align-items:center; justify-content:center; min-height:100vh; }
-.box { background:var(--card); border-radius:14px; padding:32px 34px; width:min(380px,92vw); box-shadow:0 24px 70px rgba(0,0,0,.18); }
+.box { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:32px 34px; width:min(380px,92vw); box-shadow:0 24px 70px var(--shadow); }
 h2 { font-size:18px; margin-bottom:4px; }
 .sub { font-size:12.5px; color:var(--dim); margin-bottom:18px; }
-input { width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 13px; font-size:14px; margin-bottom:12px; font-family:inherit; outline:none; transition:border .15s; }
+input { width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 13px; font-size:14px; margin-bottom:12px; font-family:inherit; outline:none; transition:border .15s; background:var(--input-bg); color:var(--txt); }
+input::placeholder { color:var(--hint); opacity:1; }
 input:focus { border-color:var(--accent); }
-button { width:100%; padding:10px; font-size:14px; border:none; border-radius:9px; background:var(--accent); color:#fff; cursor:pointer; }
+button { width:100%; padding:10px; font-size:14px; border:none; border-radius:9px; background:var(--accent); color:var(--accent-ink); cursor:pointer; }
 button:disabled { opacity:.6; cursor:default; }
 .err { color:var(--bad); font-size:12.5px; min-height:20px; margin-bottom:6px; }
-.ok { color:#059669; font-size:13px; }
+.ok { color:var(--ok); font-size:13px; }
 </style></head><body>
 <div class="box">
   <h2>企业账号登录</h2>

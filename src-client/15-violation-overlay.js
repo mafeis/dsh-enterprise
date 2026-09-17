@@ -13,18 +13,19 @@
 #enterprise-violation-overlay { position: fixed; inset: 0; z-index: 2147483100; background: rgba(15,23,42,.55);
   display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);
   font-family: -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; }
-#enterprise-violation-overlay .box { background: #fff; border-radius: 14px; padding: 30px 32px; width: min(400px, 92vw);
-  box-shadow: 0 24px 70px rgba(0,0,0,.28); color: #1f2937; font-size: 14px; line-height: 1.7; }
-#enterprise-violation-overlay .ico { width: 44px; height: 44px; border-radius: 50%; background: rgba(220,38,38,.1);
+body[data-ds-dark-theme] #enterprise-violation-overlay { background: rgba(0,0,0,.62); }
+#enterprise-violation-overlay .box { background: var(--ent-box); border: 1px solid var(--ent-line); border-radius: 14px; padding: 30px 32px; width: min(400px, 92vw);
+  box-shadow: var(--ent-shadow); color: var(--ent-fg); font-size: 14px; line-height: 1.7; }
+#enterprise-violation-overlay .ico { width: 44px; height: 44px; border-radius: 50%; background: var(--ent-bad-soft);
   display: flex; align-items: center; justify-content: center; font-size: 22px; margin: 0 auto 12px; }
-#enterprise-violation-overlay h2 { font-size: 17px; margin: 0 0 8px; text-align: center; }
-#enterprise-violation-overlay .names { margin: 10px 0; padding: 10px 14px; background: #fef2f2; border: 1px solid #fecaca;
-  border-radius: 9px; color: #b91c1c; font-size: 13px; text-align: center; word-break: break-all; }
-#enterprise-violation-overlay .sub { font-size: 12.5px; color: #6b7280; margin-bottom: 16px; }
+#enterprise-violation-overlay h2 { font-size: 17px; margin: 0 0 8px; text-align: center; color: var(--ent-fg); }
+#enterprise-violation-overlay .names { margin: 10px 0; padding: 10px 14px; background: var(--ent-bad-tint); border: 1px solid var(--ent-bad-line);
+  border-radius: 9px; color: var(--ent-bad-strong); font-size: 13px; text-align: center; word-break: break-all; }
+#enterprise-violation-overlay .sub { font-size: 12.5px; color: var(--ent-fg-2); margin-bottom: 16px; }
 #enterprise-violation-overlay button { width: 100%; padding: 10px; font-size: 14px; border: none; border-radius: 9px;
-  background: #2563eb; color: #fff; cursor: pointer; font-family: inherit; }
+  background: var(--ent-accent); color: var(--ent-accent-ink); cursor: pointer; font-family: inherit; }
 #enterprise-violation-overlay button:disabled { opacity: .6; cursor: default; }
-#enterprise-violation-overlay .hint { margin-top: 10px; text-align: center; font-size: 12px; color: #94a3b8; }
+#enterprise-violation-overlay .hint { margin-top: 10px; text-align: center; font-size: 12px; color: var(--ent-fg-3); }
 </style>
 <div class="box">
   <div class="ico">🛡️</div>

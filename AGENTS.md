@@ -11,7 +11,7 @@
 ## 强制规则(违反将导致返工或事故)
 
 1. **`lib/` 全部为构建产物**。修改 lib 将在 `node build.mjs` 时被覆盖;源码一律位于 `src-node/` 与 `src-client/`
-2. **修改代码后必须执行** `node build.mjs && node --test "test/*.test.mjs"`(约 3 秒,零 npm 依赖);37 项测试全部通过方可视为完成
+2. **修改代码后必须执行** `node build.mjs && node --test "test/*.test.mjs"`(约 3 秒,零 npm 依赖);全部测试通过方可视为完成
 3. **`file:` 安装为复制而非引用**:源码变更后在测试实例必须执行 `remove` + `add` 重装;仅改源码不重装,实例运行的仍是旧代码
 4. **ENT_SETTINGS_PATH 红线**:测试实例启动脚本必须携带该变量;缺失时插件将读写共享的 `~/.dsh/settings.yaml`,污染生产 Desktop 配置
 5. **生产 Desktop 实例(43120)禁止触碰**:插件更新后需用户主动重启方可生效;未经用户明确要求,严禁重启、测试或终止进程。测试一律使用 43122 测试实例
@@ -24,7 +24,8 @@
 12. **企业 block-url 规则会扫描 Agent 工具参数**:测试代码中构造被禁域名必须使用字符串拼接,禁止写出完整被禁域名(写入动作会被规则引擎拦截,曾有真实事故)
 13. **发版版本号两处同步修改**:`package.json` 与 `src-node/shared/version.js`
 14. **原子写**:所有落盘操作必须经由 `writeTextAtomic`(shared/fs-utils),不得使用裸 writeFileSync
-15. **共享可变状态各归其主**:心跳状态在 `heartbeat/`、策略缓存在 `policy/`、规则计数在 `rules/engine`;跨模块访问一律经由取值函数(如 `currentHeartbeatState()`)
+15. **UI 色值一律走 `--ent-*` 语义令牌**:浏览器半区禁止出现硬编码色值,须引用 `src-client/40-theme.js` 中 `THEME_CSS` 声明的令牌(浅色在 `body`、深色覆盖在 `body[data-ds-dark-theme]`;宿主 `--dsw-alias-*` 声明在 body,写成 `:root` 取不到)。违反将被 `test/theme-tokens.test.mjs` 拦下;深色模式不可读的历史事故:0.9.6 及以前
+16. **共享可变状态各归其主**:心跳状态在 `heartbeat/`、策略缓存在 `policy/`、规则计数在 `rules/engine`;跨模块访问一律经由取值函数(如 `currentHeartbeatState()`)
 
 ## 代码地图(修改目标 → 位置)
 
@@ -41,6 +42,7 @@
 | 全部落盘路径 | `src-node/shared/paths.js`(唯一定义处) |
 | 状态文件 | `src-node/state/state.js`(`enterprise-state.json`,含旧版迁移) |
 | 浏览器 UI(遮罩/面板/水印/横幅) | `src-client/`(数字前缀决定拼接顺序,各片段共享同一工厂作用域) |
+| 配色/深色模式令牌 | `src-client/40-theme.js` 的 `THEME_CSS`(全仓唯一允许出现色字面量之处) + `mountThemeStyle()` |
 | 路由(loopback) | `src-node/web/routes.js`(16 条 /api/enterprise/* + /plugins/enterprise 登录页) |
 
 ## 调试速查(现象 → 排查方向)
