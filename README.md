@@ -183,15 +183,15 @@ node test/test-enforce.mjs            # End-to-end smoke test
 
 | 项目 | 简介 | 链接 |
 | --- | --- | --- |
-| DSH Desktop | 基于 DeepSeek Harness 构建的开源桌面客户端，本插件运行于其上。 | [GitHub](https://github.com/anywhere-labs/dsh-desktop) · [官网](https://dshdesktop.cn) |
+| DSH Desktop | 基于 DeepSeek Harness 构建的开源桌面客户端，推荐作为本插件的运行环境。 | [GitHub](https://github.com/anywhere-labs/dsh-desktop) · [官网](https://dshdesktop.cn) |
 | DeepSeek Harness | DSH 官方上游：核心智能体、插件系统与 Web UI。 | [GitHub](https://github.com/deepseek-ai/deepseek-harness) · [DeepSeek 官网](https://www.deepseek.com) |
 
 ## 🙏 致谢 / Acknowledgements
 
 - 插件能力来自 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的插件体系与运行时
-- 插件运行于 [DSH Desktop](https://github.com/anywhere-labs/dsh-desktop) 之上，依托其插件机制加载
+- 推荐使用 [DSH Desktop](https://github.com/anywhere-labs/dsh-desktop) 运行本插件，获得开箱即用的桌面体验
 
-Built on the DeepSeek Harness plugin system and runtime. Runs on [DSH Desktop](https://github.com/anywhere-labs/dsh-desktop). Thanks to the upstream open-source projects.
+Built on the DeepSeek Harness plugin system and runtime. [DSH Desktop](https://github.com/anywhere-labs/dsh-desktop) is the recommended way to run this plugin. Thanks to the upstream open-source projects.
 
 ## 📄 License
 
