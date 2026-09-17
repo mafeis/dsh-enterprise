@@ -1,4 +1,4 @@
-		/* ============ 企业管控界面水印：员工端插件 Web 界面叠加半透明水印层 ============
+		/* ============ 企业管控界面水印：用户端插件 Web 界面叠加半透明水印层 ============
 		   数据源：/api/enterprise/policy 的 watermark 布尔（策略开关，管理台下发）
 		   - 开启：全屏 pointer-events:none 重复文字层（登录账号 + 北京时间，分钟级刷新）
 		   - 防删：MutationObserver 监听水印层被移除/style 被改 → 立即重建；策略关闭 → 撤层
@@ -19,7 +19,7 @@
 			const st = wmStyle();
 			const loginAt = __entWatermark.loginAt ? String(__entWatermark.loginAt).slice(0, 16).replace("T", " ") : "";
 			const vars = {
-				"{user}": __entWatermark.user || t2("企业员工", "Enterprise user"),
+				"{user}": __entWatermark.user || t2("企业用户", "Enterprise user"),
 				"{time}": t,
 				"{device}": __entWatermark.device || "",
 				"{loginAt}": loginAt,
@@ -63,7 +63,7 @@
 			document.body.appendChild(__entWatermark.el);
 			// 定时器/观察器只建一次：mount 会被重建路径反复调用，重复建会泄漏堆叠拖死页面
 			if (__entWatermark.mo) return;
-			// 防删守护：水印层被移除或 style 被清 → 重建（员工无法靠控制台一键去水印）
+			// 防删守护：水印层被移除或 style 被清 → 重建（用户无法靠控制台一键去水印）
 			__entWatermark.mo = new MutationObserver(() => {
 				if (!__entWatermark.on) return;
 				const alive = document.querySelector('[data-enterprise-watermark="1"]');

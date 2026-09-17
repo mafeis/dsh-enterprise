@@ -64,7 +64,7 @@
 					const b = await r.json();
 					if (b.ok) {
 						// 配置经 settings watch 热生效，无需重启；若 Desktop 首启向导还挂着
-						//（旧安装未预写 skipped 标记），提示员工直接关掉即可，模型已可用。
+						//（旧安装未预写 skipped 标记），提示用户直接关掉即可，模型已可用。
 						$("enterprise-ok").innerHTML = t2("✓ 登录成功，模型已就绪", "✓ Signed in, models ready");
 						btn.textContent = t2("已配置 ✓", "Configured ✓");
 						setTimeout(() => location.reload(), 2600);

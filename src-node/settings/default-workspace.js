@@ -1,8 +1,8 @@
 /**
  * 默认工作目录注册：全新 DSH_HOME 首次登录后，若本机存在默认工作目录且
- * workspace 列表为空（新装机，员工还没自己添加过），自动注册为默认工作区——
- * 员工登录后直接进工作目录，跳过"选择文件夹"首启步骤。
- * 目录存在但已有 workspace：不动（不覆盖员工自己的选择）。
+ * workspace 列表为空（新装机，用户还没自己添加过），自动注册为默认工作区——
+ * 用户登录后直接进工作目录，跳过"选择文件夹"首启步骤。
+ * 目录存在但已有 workspace：不动（不覆盖用户自己的选择）。
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { writeTextAtomic } from '../shared/fs-utils.js'
@@ -29,9 +29,9 @@ export function ensureDefaultWorkspace() {
     if (!existsSync(file)) return // 存储服务尚未初始化：等下次登录/修复再试
     const j = JSON.parse(readFileSync(file, 'utf8'))
     const ids = j?.global?.workspaceIds ?? []
-    if (ids.length) return // 员工已有工作区：绝不覆盖
+    if (ids.length) return // 用户已有工作区：绝不覆盖
     const dir = defaultWorkspaceCandidates().find((d) => existsSync(d))
-    if (!dir) return // 本机没有默认目录：跳过（员工自行选择）
+    if (!dir) return // 本机没有默认目录：跳过（用户自行选择）
     const id = cryptoRandomId()
     j.global = j.global ?? {}
     j.global.initialized = true

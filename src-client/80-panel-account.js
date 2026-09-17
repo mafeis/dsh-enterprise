@@ -55,7 +55,7 @@
 					})()
 				] }),
 
-				// 心跳设置不暴露给员工：心跳开关/间隔由网关统一管理下发（客户端仅显示上方在线状态）
+				// 心跳设置不暴露给用户：心跳开关/间隔由网关统一管理下发（客户端仅显示上方在线状态）
 
 				reactJsx.jsx("h3", { style: UI.h3("#2563eb"), children: t("操作", "Actions") }),
 				reactJsx.jsxs("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", margin: "8px 0" }, children: [

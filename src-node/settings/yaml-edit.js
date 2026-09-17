@@ -79,7 +79,7 @@ export function profilePatchSettingsPaths() {
     const profileDir = process.env.ENT_PROFILE_DIR
       ?? (process.env.DSH_HOME ? join(process.env.DSH_HOME, 'profiles') : null)
     if (!profileDir || !existsSync(profileDir)) return []
-    // 多 profile 场景（Desktop 多开/员工多环境）：无法可靠判断当前激活的是哪个 profile
+    // 多 profile 场景（Desktop 多开/用户多环境）：无法可靠判断当前激活的是哪个 profile
     //（profile-selection state 在 Desktop userData 目录，插件不可依赖），所以把**所有**
     // 声明了 settings path 的 profile 配置全量同步——幂等且无副作用，代价可忽略。
     const out = new Set()
@@ -127,7 +127,7 @@ export function syncOneMainSettingsProvider(mainSettings, base, models) {
     }
   }
   if (provIdx === -1) {
-    // 全新员工机的 settings.yaml 往往只有 ui-onboarding 等零散段，根本没有
+    // 全新机器的 settings.yaml 往往只有 ui-onboarding 等零散段，根本没有
     // llm-pi-ai:/providers: 骨架——此前在这里静默 return，导致登录成功但
     // provider 永远写不进主配置、模型选择器为空（220 实机复现）。这里补建骨架再插入。
     if (llmIdx === -1) {
@@ -202,7 +202,7 @@ export function syncOneMainSettingsProvider(mainSettings, base, models) {
   writeTextAtomic(mainSettings, lines.join('\n'))
 }
 
-/** 员工端统一增强模式（dsh-desktop.mode: advanced，桌面专用布局）。
+/** 用户端统一增强模式（dsh-desktop.mode: advanced，桌面专用布局）。
  *  宿主默认 compatibility（兼容模式）；已存在任何 mode 值（用户选过）则不覆盖。 */
 export function ensureDesktopAdvancedMode(lines) {
   if (!lines.some((l) => /^dsh-desktop:\s*$/.test(l))) {

@@ -95,7 +95,7 @@ export function apply(ctx) {
             }
             return repairConfigure().then((r) => {
               if (r?.ok) ctxLoggerInfoSafe(`[enterprise] 启动对账：本地模型目录与网关不一致（本地 ${local.length} 个 / 网关 ${remote.length} 个），已自动更新`)
-              else ctxLoggerInfoSafe(`[enterprise] 启动对账发现差异但重配失败: ${r?.error ?? '未知'}（员工可手动"一键配置"）`)
+              else ctxLoggerInfoSafe(`[enterprise] 启动对账发现差异但重配失败: ${r?.error ?? '未知'}（用户可手动"一键配置"）`)
             }).catch(() => {})
           })
           .catch(() => { /* 网关不可达：心跳与下次启动再对账 */ })

@@ -22,11 +22,11 @@
 
 ### 它解决了什么问题
 
-装了 DSH 终端的员工电脑上，模型要自己配：填地址、贴密钥、选默认模型——配错一个就用不了，改一次密码就得挨台重配。管理员对终端也没有约束力：想强制登录、想下架某个插件、想拦住敏感内容外发，全都做不到。
+装了 DSH 终端的用户电脑上，模型要自己配：填地址、贴密钥、选默认模型——配错一个就用不了，改一次密码就得挨台重配。管理员对终端也没有约束力：想强制登录、想下架某个插件、想拦住敏感内容外发，全都做不到。
 
-这个插件装进员工 DSH 终端后，一条龙解决：
+这个插件装进用户 DSH 终端后，一条龙解决：
 
-- **员工只登录一次** — 账号密码换企业令牌，模型列表、默认模型、凭证全部自动配好，登录即可用；配置坏了在设置页一键修复
+- **用户只登录一次** — 账号密码换企业令牌，模型列表、默认模型、凭证全部自动配好，登录即可用；配置坏了在设置页一键修复
 - **终端始终与服务器对齐** — 登录、修复、启动对账三条路保障终端模型列表与企业目录一致
 - **策略自动下发** — 服务器下发的策略（心跳开关、插件管控、内容规则）在终端自动生效，支持灰度与回执
 - **插件管控** — 自动清理企业允许清单之外的插件，提供企业插件市场统一安装入口
@@ -61,7 +61,7 @@
 dsh plugin add dsh-enterprise
 ```
 
-装好后打开 DSH 终端，登录页在 `/plugins/enterprise`——员工输入企业账号密码即可，不需要手动填任何地址或密钥。
+装好后打开 DSH 终端，登录页在 `/plugins/enterprise`——用户输入企业账号密码即可，不需要手动填任何地址或密钥。
 
 ### 从源码构建（开发者）
 
@@ -78,9 +78,9 @@ node test/test-enforce.mjs            # 插件管控端到端冒烟
 
 ### What problem does it solve
 
-On employee machines running DSH, models must be configured by hand: enter the endpoint, paste the key, pick a default model — one typo and nothing works, and every password change means reconfiguring every machine. Admins have no leverage over terminals either: enforcing sign-in, disabling a plugin, or blocking sensitive content from leaving are all impossible.
+On user machines running DSH, models must be configured by hand: enter the endpoint, paste the key, pick a default model — one typo and nothing works, and every password change means reconfiguring every machine. Admins have no leverage over terminals either: enforcing sign-in, disabling a plugin, or blocking sensitive content from leaving are all impossible.
 
-Install this plugin into the employee's DSH terminal and all of it just works:
+Install this plugin into the user's DSH terminal and all of it just works:
 
 - **One sign-in, everything configured** — credentials are exchanged for an enterprise token; model list, default model and credentials are written automatically. Broken config? One-click repair in the settings panel
 - **Terminals stay in sync** — sign-in, repair and startup reconciliation keep the terminal's model list aligned with the enterprise catalog
@@ -117,7 +117,7 @@ One command, from npm (recommended):
 dsh plugin add dsh-enterprise
 ```
 
-Once installed, open the DSH terminal and go to `/plugins/enterprise` — employees just enter their enterprise account and password; no endpoint or key to fill in by hand.
+Once installed, open the DSH terminal and go to `/plugins/enterprise` — users just enter their enterprise account and password; no endpoint or key to fill in by hand.
 
 ### Build from source (developers)
 

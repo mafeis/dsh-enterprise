@@ -14,7 +14,7 @@
  *      · manifestOp 互斥（claimManifestOp/releaseManifestOp）：本模块与 web 路由的
  *        plugin-install（dsh plugin add → pnpm）都会读改写 profile package.json，
  *        进程内二选一串行执行，防止「pnpm 用旧快照写回复活条目」/「丢失更新」；
- *      · 每次写 manifest 后复核、删实体后再复核（防复活自愈）。员工绕过 DSH 在
+ *      · 每次写 manifest 后复核、删实体后再复核（防复活自愈）。用户绕过 DSH 在
  *        shell 里手动 pnpm 仍是残余风险（进程间无锁），靠下一轮管控兜底。
  *  - 保护名单：本插件自身 + DSH 必装组件。管理员漏配清单时也不清，避免"自断管控"或
  *    砸掉宿主；此时记录日志提醒管理员把保护项加入管理台允许清单（否则心跳持续告警）。
@@ -131,7 +131,7 @@ export function retryPendingPluginEntities() {
   retryPendingEntities(findProfileRoot())
 }
 
-/** 记录本次清理（员工端面板据此提示「重启 DSH 后完全生效」）+ 登记删除失败的重试队列 */
+/** 记录本次清理（用户端面板据此提示「重启 DSH 后完全生效」）+ 登记删除失败的重试队列 */
 function recordCleanup(removed, profileDir) {
   const entitiesFailed = removed.filter((r) => r.configOk && !r.entityOk).map((r) => r.name)
   const patch = {
@@ -163,7 +163,7 @@ export async function enforcePluginAllowlist(trigger = 'startup') {
     if (!installed) return { ok: true, skipped: 'installed-unknown' } // 非 profile 形态，无法对账
 
     const violations = installed.filter((x) => !allowed.includes(x) && !PROTECTED_PLUGINS.includes(x))
-    // 档位分流：warn/off 不清理本机（off/warn 都只走日志；员工端面板警告与否由 status 的 enforceMode 控制）
+    // 档位分流：warn/off 不清理本机（off/warn 都只走日志；用户端面板警告与否由 status 的 enforceMode 控制）
     const mode = policy?.pluginEnforce ?? 'enforce'
     if (violations.length && mode !== 'enforce') {
       pluginLog(`[enterprise] 插件管控（档位 ${mode}）：清单外插件 ${violations.join('、')} —— ${mode === 'warn' ? '仅警告不处理' : '不限制仅记录'}`)
@@ -234,7 +234,7 @@ export async function enforcePluginAllowlist(trigger = 'startup') {
 
       if (removed.length) {
         resetDeviceInfoCache() // 让下一拍心跳带更新后的插件清单
-        recordCleanup(removed, profileDir) // 员工端提示重启生效 + 登记实体删除重试
+        recordCleanup(removed, profileDir) // 用户端提示重启生效 + 登记实体删除重试
       }
       return { ok: true, removed, protectedMissing }
     } finally {

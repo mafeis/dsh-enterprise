@@ -90,14 +90,14 @@ export function registerRuleHooks(ctx) {
           }).filter(Boolean).join('\n')
           const r = runTextRules(text)
           if (!r.allowed) {
-            // 管理台记录：命中词 + 规则 + 消息片段；员工横幅只用 matched/message（见 /api/enterprise/rules）
+            // 管理台记录：命中词 + 规则 + 消息片段；用户横幅只用 matched/message（见 /api/enterprise/rules）
             const detail = `命中「${r.matched}」（规则 ${r.hit?.id ?? '?'}）｜消息：${r.snippet}`
             // 管理员提示语支持 [] 占位符：记录前把命中的词填进去（横幅直接显示成品文案）；style 透传
             const fillMessage = (r.hit?.message || '').replaceAll('[]', r.matched ?? '')
             const ruleStyle = r.hit?.style ?? null
             if (r.hit?.action === 'warn') {
               // warn 级：放行 + 记命中记录（管理台/客户端横幅数据源），**不进模型上下文**——
-              // 员工侧的界面提醒由客户端轮询命中记录后在回复末尾渲染（见 src-client/95-turn-banner.js）
+              // 用户侧的界面提醒由客户端轮询命中记录后在回复末尾渲染（见 src-client/95-turn-banner.js）
               noteRuleRun('block-word', true)
               recordRuleHit(r.hit, detail, { kind: 'word', matched: r.matched, message: fillMessage, style: ruleStyle, snippet: r.snippet })
               ctx.logger.warn(`[enterprise] 出站消息命中提醒级规则 ${r.hit?.id}（${r.hit?.value}）：已记录（客户端展示提醒）`)

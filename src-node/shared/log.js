@@ -1,6 +1,6 @@
 /**
  * 独立落盘日志：%LOCALAPPDATA%\DSH-Enterprise\client-log.txt
- *  员工/管理员排查就认这一个文件（安装日志 install-log.txt 在同目录）。
+ *  用户/管理员排查就认这一个文件（安装日志 install-log.txt 在同目录）。
  *  全部关键动作落盘：登录/登出/对账/自愈/指纹重配/规则拦截/心跳异常。
  *  1MB 轮转：超过后改名 .old 覆盖，最多留两份。
  *

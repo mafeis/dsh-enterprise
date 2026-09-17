@@ -298,7 +298,7 @@ export function createRoutes(ctx) {
         const policySnap = await fetchPolicySnapshot()
         const allowedPlugins = Array.isArray(policySnap?.allowedPlugins) ? policySnap.allowedPlugins : null
         // 违规 = 允许清单非空 且 已安装清单已知 时，安装了清单之外的插件
-        //（保护名单除外：本插件自身与 DSH 必装组件由管控保留，不向员工端告警）
+        //（保护名单除外：本插件自身与 DSH 必装组件由管控保留，不向用户端告警）
         const violations = (Array.isArray(allowedPlugins) && allowedPlugins.length && Array.isArray(installedPlugins))
           ? installedPlugins.filter((x) => !allowedPlugins.includes(x) && !PROTECTED_PLUGINS.includes(x))
           : []
@@ -464,7 +464,7 @@ export function createRoutes(ctx) {
             void runHeartbeatOnce().catch(() => { /* 即时心跳失败不影响登录流程 */ })
             // 登录后自动补一次 repairConfigure（与"一键配置 Provider"同一函数，幂等）：
             // 220 实机发现登录写入在个别机器上未即时反映到模型选择器（要手动点一键配置
-            // 才好），延迟补写保证跟手动点击完全同路径、同结果，员工零操作。
+            // 才好），延迟补写保证跟手动点击完全同路径、同结果，用户零操作。
             setTimeout(() => {
               repairConfigure().then((rr) => {
                 if (rr?.ok) pluginLog(`登录后自动重配完成（模型 ${rr.models.length} 个，运行中实例已同步）`)

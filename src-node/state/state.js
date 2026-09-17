@@ -35,7 +35,7 @@ export function readToken() {
 }
 
 /** 出厂网关地址：ENT_GATEWAY_URL 环境变量 → gateway-url.txt（IT 部署预置，一行 URL）→ 空。
- *  登录页预填兜底：员工新机器零输入（优先级低于上次使用的 state.gateway）。 */
+ *  登录页预填兜底：用户新机器零输入（优先级低于上次使用的 state.gateway）。 */
 export function readFactoryGateway() {
   const env = String(process.env.ENT_GATEWAY_URL ?? '').trim()
   if (env) return env.replace(/\/+$/, '')
