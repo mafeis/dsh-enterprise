@@ -8,13 +8,28 @@
   统一企业登录 · 模型自动配置 · 策略治理
   Unified sign-in · Auto model provisioning · Policy governance
 
-  ![License](https://img.shields.io/badge/license-MIT-blue)
-  ![Node](https://img.shields.io/badge/node-22.19%2B%20%7C%7C%2024%2B-339933?logo=node.js&logoColor=white)
-  ![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
-  ![Platform](https://img.shields.io/badge/platform-DSH%20Desktop-818cf8)
+  <sub>独立开源项目，非 DeepSeek 官方产品 · Independent open-source project, not an official DeepSeek product</sub>
 
-  [简体中文](#-简体中文) · [English](#-english)
+  <p>
+    <a href="https://github.com/mafeis/dsh-enterprise/releases/latest"><img src="https://img.shields.io/github/v/release/mafeis/dsh-enterprise?style=flat&label=release&color=4D6BFE" alt="Release"></a>
+    <a href="https://www.npmjs.com/package/dsh-enterprise"><img src="https://img.shields.io/npm/v/dsh-enterprise?style=flat&color=CB3837" alt="npm"></a>
+    <a href="https://www.npmjs.com/package/dsh-enterprise"><img src="https://img.shields.io/npm/dm/dsh-enterprise?style=flat&label=downloads&color=9ca3af" alt="npm downloads"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT License"></a>
+  </p>
+  <p>
+    <img src="https://img.shields.io/badge/node-22.19%2B%20%7C%7C%2024%2B-339933?logo=node.js&logoColor=white" alt="Node 22.19+ | 24+">
+    <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">
+    <img src="https://img.shields.io/badge/platform-DSH%20Desktop-818cf8" alt="Platform: DSH Desktop">
+  </p>
+
+  [简体中文](#-简体中文) · [English](#-english) · [最新下载](https://github.com/mafeis/dsh-enterprise/releases/latest)
 </div>
+
+<!-- 截图位：把登录页/企业面板截图放到 assets/screenshot-login.png 后取消下面注释
+<p align="center">
+  <img src="assets/screenshot-login.png" alt="dsh-enterprise 登录页与企业面板" width="100%">
+</p>
+-->
 
 ---
 
@@ -32,6 +47,18 @@
 - **插件管控** — 自动清理企业允许清单之外的插件，提供企业插件市场统一安装入口
 - **未登录即阻断** — 可开启强制登录，不登录不让用
 - **敏感内容拦截** — URL 拦截与文本 DLP 规则在终端侧生效，带命中记录
+
+### 安装
+
+企业场景下，通常由管理员在网关「插件市场」统一下发安装，用户无需自己动手。
+
+手动安装（一条命令，从 npm）：
+
+```powershell
+dsh plugin add dsh-enterprise
+```
+
+装好后打开 DSH 终端，登录页在 `/plugins/enterprise`——用户输入企业账号密码即可，不需要手动填任何地址或密钥。
 
 ### 功能一览
 
@@ -53,17 +80,10 @@
 | npm 依赖 | **零依赖** — 构建脚本与运行时都不装任何包 |
 | 插件权限 | `fs:read` / `fs:write` / `net:loopback`（仅访问本机回环地址） |
 
-### 安装
-
-一条命令，从 npm 安装（推荐）：
-
-```powershell
-dsh plugin add dsh-enterprise
-```
-
-装好后打开 DSH 终端，登录页在 `/plugins/enterprise`——用户输入企业账号密码即可，不需要手动填任何地址或密钥。
-
 ### 从源码构建（开发者）
+
+<details>
+<summary>展开</summary>
 
 ```powershell
 git clone https://github.com/mafeis/dsh-enterprise.git
@@ -73,6 +93,14 @@ dsh plugin add file:./
 node --test "test/*.test.mjs"         # 单元测试
 node test/test-enforce.mjs            # 插件管控端到端冒烟
 ```
+
+</details>
+
+### 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| [客户端插件核心文档](docs/客户端插件核心文档.md) | 模块结构、登录链路、心跳保活、策略管控、规则引擎、排错 |
 
 ## 🇬🇧 English
 
@@ -88,6 +116,18 @@ Install this plugin into the user's DSH terminal and all of it just works:
 - **Plugin governance** — plugins outside the enterprise allowlist are cleaned up on startup; an enterprise marketplace provides a single install source
 - **No sign-in, no usage** — mandatory sign-in can be enforced
 - **Sensitive content blocking** — URL interception and text DLP rules run locally, with hit records
+
+### Installation
+
+In enterprise deployments the plugin is usually pushed to terminals by admins through the gateway's plugin marketplace — users install nothing themselves.
+
+Manual install (one command, from npm):
+
+```powershell
+dsh plugin add dsh-enterprise
+```
+
+Once installed, open the DSH terminal and go to `/plugins/enterprise` — users just enter their enterprise account and password; no endpoint or key to fill in by hand.
 
 ### Features
 
@@ -109,17 +149,10 @@ Install this plugin into the user's DSH terminal and all of it just works:
 | npm packages | **Zero dependencies** — neither build script nor runtime installs anything |
 | Plugin permissions | `fs:read` / `fs:write` / `net:loopback` (loopback only) |
 
-### Installation
-
-One command, from npm (recommended):
-
-```powershell
-dsh plugin add dsh-enterprise
-```
-
-Once installed, open the DSH terminal and go to `/plugins/enterprise` — users just enter their enterprise account and password; no endpoint or key to fill in by hand.
-
 ### Build from source (developers)
+
+<details>
+<summary>Expand</summary>
 
 ```powershell
 git clone https://github.com/mafeis/dsh-enterprise.git
@@ -130,11 +163,25 @@ node --test "test/*.test.mjs"         # Unit tests
 node test/test-enforce.mjs            # End-to-end smoke test
 ```
 
+</details>
+
+### Documentation
+
+| Document | Contents |
+| --- | --- |
+| [Client plugin core docs](docs/客户端插件核心文档.md) | Module layout, sign-in flow, heartbeat, policy governance, rules engine, troubleshooting (Chinese) |
+
 ---
 
 ## 🔗 Related / 相关项目
 
 - [dsh-enterprise-gateway](https://github.com/mafeis/dsh-enterprise-gateway) — 企业网关服务端 · Enterprise gateway server (this plugin pairs with it · 插件与之配对使用)
+
+## 🙏 致谢 / Acknowledgements
+
+- 插件能力来自 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的插件体系与运行时
+
+Built on the DeepSeek Harness plugin system and runtime. Thanks to the upstream open-source projects.
 
 ## 📄 License
 
