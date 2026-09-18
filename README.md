@@ -70,7 +70,7 @@ curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- http://<网关IP>:889
 & ([scriptblock]::Create((irm https://www.fffly.com/windows-setup.ps1))) -GatewayUrl http://<网关IP>:8899
 ```
 
-脚本自动完成：Node/pnpm 便携版装进用户目录 → DSH Desktop 最新版（动态版本检测 + sha256 校验，旧版自动升级）→ 安装本插件 → 预置（零弹窗/增强模式/网关地址预填/默认工作空间）→ 启动落在登录页。幂等可重跑。老机器已有直连 provider 会先备份再清理，只保留企业网关。
+例：`& ([scriptblock]::Create((irm https://www.fffly.com/windows-setup.ps1))) -GatewayUrl http://192.168.1.10:8899`
 
 <details>
 <summary>手动安装（分步）</summary>
@@ -182,7 +182,7 @@ One command, lands on the sign-in page (PowerShell, no admin required):
 & ([scriptblock]::Create((irm https://www.fffly.com/windows-setup.ps1))) -GatewayUrl http://<gateway-ip>:8899
 ```
 
-The script handles: portable Node/pnpm in the user directory → latest DSH Desktop (dynamic version check + sha256 verification, auto-upgrade) → this plugin → presets (zero dialogs/advanced mode/gateway URL prefill/default workspace) → launch landing on the sign-in page. Idempotent. On machines with existing direct-connect providers, they are backed up and removed, keeping only the enterprise gateway.
+e.g. `& ([scriptblock]::Create((irm https://www.fffly.com/windows-setup.ps1))) -GatewayUrl http://192.168.1.10:8899`
 
 <details>
 <summary>Manual install (step by step)</summary>
