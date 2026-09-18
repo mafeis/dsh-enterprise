@@ -50,30 +50,18 @@
 
 ### 安装
 
-运行环境任选其一：[DSH Desktop](https://dshdesktop.cn) 或原版 DSH（CLI）。
+#### 企业部署：网关自带接入页
 
-#### macOS（12+）· DSH Desktop
+插件不单独安装——它是企业客户端，必须配 [dsh-enterprise-gateway](https://github.com/mafeis/dsh-enterprise-gateway) 使用。管理员只需把一个地址发给员工：
 
-一条命令，装完即到登录页：
-
-```bash
-curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- http://<网关IP>:8899
+```
+http://<网关IP>:8899/
 ```
 
-例：`curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- http://192.168.1.10:8899`
-
-#### Windows（10/11 x64）· DSH Desktop
-
-一条命令，装完即到登录页（PowerShell，无需管理员）：
-
-```powershell
-& ([scriptblock]::Create((irm https://www.fffly.com/windows-setup.ps1))) -GatewayUrl http://<网关IP>:8899
-```
-
-例：`& ([scriptblock]::Create((irm https://www.fffly.com/windows-setup.ps1))) -GatewayUrl http://192.168.1.10:8899`
+员工浏览器打开后，页面自动识别系统，按分步指引复制一条命令回车即可——命令自动携带本网关地址，装完落在登录页。IT 不用拼参数，内网可用（脚本由网关自托管，不经公网）。
 
 <details>
-<summary>手动安装（分步）</summary>
+<summary>开发者手动安装</summary>
 
 1. 安装并启动一次 [DSH Desktop](https://dshdesktop.cn)，退出
 2. PowerShell 执行：
@@ -101,7 +89,7 @@ dsh plugin --profile ent add dsh-enterprise
 mkdir -p ~/.dsh/enterprise && echo "http://<网关IP>:8899" > ~/.dsh/enterprise/gateway-url.txt
 ```
 
-> 企业批量部署：管理员在网关「插件市场」统一下发，用户端免装。
+> 企业批量部署：管理员把网关接入页地址（`http://<网关IP>:8899/`）发给员工即可，员工照页面指引一条命令完成安装；插件统一管控由网关「插件管控 → 插件仓库」收口。
 
 ### 功能一览
 
@@ -162,30 +150,18 @@ Install this plugin into the user's DSH terminal and all of it just works:
 
 ### Installation
 
-Pick either runtime: [DSH Desktop](https://dshdesktop.cn) or stock DSH (CLI).
+#### Enterprise rollout: gateway setup page
 
-#### macOS (12+) · DSH Desktop
+The plugin is not installed standalone — it is the enterprise client and requires [dsh-enterprise-gateway](https://github.com/mafeis/dsh-enterprise-gateway). The admin only sends employees one URL:
 
-One command, lands on the sign-in page:
-
-```bash
-curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- http://<gateway-ip>:8899
+```
+http://<gateway-ip>:8899/
 ```
 
-e.g. `curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- http://192.168.1.10:8899`
-
-#### Windows (10/11 x64) · DSH Desktop
-
-One command, lands on the sign-in page (PowerShell, no admin required):
-
-```powershell
-& ([scriptblock]::Create((irm https://www.fffly.com/windows-setup.ps1))) -GatewayUrl http://<gateway-ip>:8899
-```
-
-e.g. `& ([scriptblock]::Create((irm https://www.fffly.com/windows-setup.ps1))) -GatewayUrl http://192.168.1.10:8899`
+Opening it in a browser detects the OS automatically and walks the employee through copying one command — the command carries the gateway address by itself and lands on the sign-in page. No parameters to assemble, works on intranets (scripts are served by the gateway itself).
 
 <details>
-<summary>Manual install (step by step)</summary>
+<summary>Manual install (developers)</summary>
 
 1. Install [DSH Desktop](https://dshdesktop.cn), launch once, quit
 2. In PowerShell:
@@ -213,7 +189,7 @@ Sign in at `/plugins/enterprise` in the web UI. Optional, prefill the gateway UR
 mkdir -p ~/.dsh/enterprise && echo "http://<gateway-ip>:8899" > ~/.dsh/enterprise/gateway-url.txt
 ```
 
-> Enterprise rollout: admins push the plugin from the gateway marketplace — no manual install.
+> Enterprise rollout: send employees the gateway setup page URL (`http://<gateway-ip>:8899/`) — they follow the on-screen steps and finish with one command. Plugin governance is centralized in the gateway's plugin repo.
 
 ### Features
 

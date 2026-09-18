@@ -70,13 +70,14 @@
 				if (!alive) { __entWatermark.el = null; entWatermarkMount(); }
 			});
 			__entWatermark.mo.observe(document.body, { childList: true });
-			// 时间戳分钟级刷新（重建整层，文案同步更新）
+			// 时间戳分钟级刷新：原位更新 span 文案，不重建整层——
+			// remove+rebuild 会让全屏合成层出现一帧空档，DSH 窗口每分钟可见闪一下
 			__entWatermark.timer = setInterval(() => {
 				if (!__entWatermark.on) return;
-				const old = document.querySelector('[data-enterprise-watermark="1"]');
-				if (old) old.remove();
-				__entWatermark.el = null;
-				entWatermarkMount();
+				const cur = document.querySelector('[data-enterprise-watermark="1"]');
+				if (!cur) { __entWatermark.el = null; entWatermarkMount(); return; }
+				const txt = entWatermarkText();
+				for (const s of cur.querySelectorAll("span")) s.textContent = txt;
 			}, 60 * 1000);
 		}
 
