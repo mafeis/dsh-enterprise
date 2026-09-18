@@ -52,13 +52,13 @@
 
 #### 企业部署：网关自带接入页
 
-插件不单独安装——它是企业客户端，必须配 [dsh-enterprise-gateway](https://github.com/mafeis/dsh-enterprise-gateway) 使用。管理员只需把一个地址发给员工：
+插件不单独安装——它是企业客户端，必须配 [dsh-enterprise-gateway](https://github.com/mafeis/dsh-enterprise-gateway) 使用。管理员只需把一个地址发给用户：
 
 ```
 http://<网关IP>:8899/
 ```
 
-员工浏览器打开后，页面自动识别系统，按分步指引复制一条命令回车即可——命令自动携带本网关地址，装完落在登录页。IT 不用拼参数，内网可用（脚本由网关自托管，不经公网）。
+用户浏览器打开后，页面自动识别系统，按分步指引复制一条命令回车即可——命令自动携带本网关地址，装完落在登录页。IT 不用拼参数，内网可用（脚本由网关自托管，不经公网）。
 
 <details>
 <summary>开发者手动安装</summary>
@@ -89,7 +89,7 @@ dsh plugin --profile ent add dsh-enterprise
 mkdir -p ~/.dsh/enterprise && echo "http://<网关IP>:8899" > ~/.dsh/enterprise/gateway-url.txt
 ```
 
-> 企业批量部署：管理员把网关接入页地址（`http://<网关IP>:8899/`）发给员工即可，员工照页面指引一条命令完成安装；插件统一管控由网关「插件管控 → 插件仓库」收口。
+> 企业批量部署：管理员把网关接入页地址（`http://<网关IP>:8899/`）发给用户即可，用户照页面指引一条命令完成安装；插件统一管控由网关「插件管控 → 插件仓库」收口。
 
 ### 功能一览
 
@@ -152,13 +152,13 @@ Install this plugin into the user's DSH terminal and all of it just works:
 
 #### Enterprise rollout: gateway setup page
 
-The plugin is not installed standalone — it is the enterprise client and requires [dsh-enterprise-gateway](https://github.com/mafeis/dsh-enterprise-gateway). The admin only sends employees one URL:
+The plugin is not installed standalone — it is the enterprise client and requires [dsh-enterprise-gateway](https://github.com/mafeis/dsh-enterprise-gateway). The admin only sends users one URL:
 
 ```
 http://<gateway-ip>:8899/
 ```
 
-Opening it in a browser detects the OS automatically and walks the employee through copying one command — the command carries the gateway address by itself and lands on the sign-in page. No parameters to assemble, works on intranets (scripts are served by the gateway itself).
+Opening it in a browser detects the OS automatically and walks the user through copying one command — the command carries the gateway address by itself and lands on the sign-in page. No parameters to assemble, works on intranets (scripts are served by the gateway itself).
 
 <details>
 <summary>Manual install (developers)</summary>
@@ -189,7 +189,7 @@ Sign in at `/plugins/enterprise` in the web UI. Optional, prefill the gateway UR
 mkdir -p ~/.dsh/enterprise && echo "http://<gateway-ip>:8899" > ~/.dsh/enterprise/gateway-url.txt
 ```
 
-> Enterprise rollout: send employees the gateway setup page URL (`http://<gateway-ip>:8899/`) — they follow the on-screen steps and finish with one command. Plugin governance is centralized in the gateway's plugin repo.
+> Enterprise rollout: send users the gateway setup page URL (`http://<gateway-ip>:8899/`) — they follow the on-screen steps and finish with one command. Plugin governance is centralized in the gateway's plugin repo.
 
 ### Features
 
