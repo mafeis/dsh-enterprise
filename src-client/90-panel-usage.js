@@ -19,7 +19,11 @@
 					.finally(() => { if (alive) setUsageLoading(false); });
 				return () => { alive = false; };
 			}, [usageDays]);
-			const fmtNum = (n) => (n ?? 0).toLocaleString(undefined);
+			const fmtNum = (n) => {
+				const v = n ?? 0;
+				if (Math.abs(v) >= 10000000) return (v / 10000).toFixed(1).replace(/\.0$/, "") + " 万";
+				return v.toLocaleString(undefined);
+			};
 			const rangeLabel = usageDays === 1 ? t("当天", "Today") : usageDays === 7 ? t("近 7 日", "Last 7 days") : t("近 30 天", "Last 30 days");
 			const maxReq = Math.max(1, ...(usage?.byModel || []).map((r) => r.requests || 0));
 			return reactJsx.jsxs("div", { style: UI.page, children: [
