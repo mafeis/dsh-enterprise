@@ -29,6 +29,7 @@ import { collectInstalledPlugins, collectDeviceInfo } from '../device/device-inf
 import { fetchPolicySnapshot, resolvePluginInstallSpec, runPluginCli, findProfileRoot, MARKET_DESC_ZH, MARKET_DESC_EN, marketMeta, peekCachedPolicy } from '../policy/policy.js'
 import { PROTECTED_PLUGINS, isEnforceBusy, claimManifestOp, releaseManifestOp } from '../enforce/plugin-enforce.js'
 import { RULE_ENGINE_VERSION, runTextRules, runUrlRules, noteRuleRun, getRuleRuns, getRuleHits, isStepHookAlive, ruleHost } from '../rules/engine.js'
+import { VERSION } from '../shared/version.js'
 import { currentHeartbeatState, runHeartbeatOnce, syncHeartbeatTimer } from '../heartbeat/heartbeat.js'
 import { pendingUpdateRestart } from '../update/self-update.js'
 import { repairConfigure, loginAndConfigure } from '../auth/login.js'
@@ -304,6 +305,7 @@ export function createRoutes(ctx) {
           ? installedPlugins.filter((x) => !allowedPlugins.includes(x) && !PROTECTED_PLUGINS.includes(x))
           : []
         json(200, {
+          pluginVersion: VERSION,
           configured: !!p,
           gateway: p?.baseUrl ?? state.gateway ?? '',
           lastGateway: state.gateway ?? '',

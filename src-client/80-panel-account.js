@@ -52,6 +52,17 @@
 							reactJsx.jsx("span", { style: UI.label, children: t("在线心跳", "Heartbeat") }),
 							node
 						] });
+					})(),
+					(() => {
+						const up = status.pluginGovernance && status.pluginGovernance.updatePending;
+						const ver = status.pluginVersion || "—";
+						const node = up && up.version
+							? UI.dot("var(--ent-warn, var(--ent-accent))", ver + " → " + up.version + t("（重启生效）", " (restart to apply)"))
+							: reactJsx.jsx("span", { style: UI.mono, children: ver });
+						return reactJsx.jsxs("div", { style: UI.row, children: [
+							reactJsx.jsx("span", { style: UI.label, children: t("插件版本", "Plugin version") }),
+							node
+						] });
 					})()
 				] }),
 
