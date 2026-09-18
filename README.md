@@ -19,7 +19,7 @@
   <p>
     <img src="https://img.shields.io/badge/node-22.19%2B%20%7C%7C%2024%2B-339933?logo=node.js&logoColor=white" alt="Node 22.19+ | 24+">
     <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">
-    <img src="https://img.shields.io/badge/platform-DSH%20Desktop-818cf8" alt="Platform: DSH Desktop">
+    <img src="https://img.shields.io/badge/platform-DSH%20Desktop%20%7C%20CLI-818cf8" alt="Platform: DSH Desktop | CLI">
   </p>
 
   [简体中文](#-简体中文) · [English](#-english) · [最新下载](https://github.com/mafeis/dsh-enterprise/releases/latest)
@@ -50,30 +50,58 @@
 
 ### 安装
 
-**Mac 一键安装（推荐，含 DSH Desktop + 本插件 + 全部预置）**：
+运行环境任选其一：[DSH Desktop](https://dshdesktop.cn) 或原版 DSH（CLI）。
+
+#### macOS（12+）· DSH Desktop
+
+一条命令，装完即到登录页：
 
 ```bash
-curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- <网关地址>
-# 例：curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- http://192.168.1.10:8899
+curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- http://<网关IP>:8899
 ```
 
-脚本自动完成：Node/pnpm 检测安装（缺失时经 Homebrew，需一次管理员密码）→ DSH Desktop 最新版（动态版本检测 + sha256 校验，旧版自动升级）→ 安装本插件 → 预置（跳过首启向导/增项模式/网关地址预填/默认工作空间）→ 启动落在登录页。幂等可重跑，不碰用户会话数据。环境要求：macOS 12+，磁盘 2GB，网络可达 GitHub/npm。
+例：`curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- http://192.168.1.10:8899`
 
-企业场景下，也通常由管理员在网关「插件市场」统一下发安装，用户无需自己动手。
+#### Windows（10/11 x64）· DSH Desktop
 
-手动安装（前置：全局 pnpm，`npm i -g pnpm`）：
+一条命令，装完即到登录页（PowerShell，无需管理员）：
 
-```bash
-# 终端/会话 profile：<name> 自取，首次自动初始化
-dsh plugin --profile ent add dsh-enterprise
+```powershell
+& ([scriptblock]::Create((irm https://www.fffly.com/windows-setup.ps1))) -GatewayUrl http://<网关IP>:8899
+```
 
-# DSH Desktop 桌面 GUI：desktop profile 被 CLI 保留，手动安装
-cd ~/.dsh/profiles/desktop          # Windows: %USERPROFILE%\.dsh\profiles\desktop
+脚本自动完成：Node/pnpm 便携版装进用户目录 → DSH Desktop 最新版（动态版本检测 + sha256 校验，旧版自动升级）→ 安装本插件 → 预置（零弹窗/增强模式/网关地址预填/默认工作空间）→ 启动落在登录页。幂等可重跑。老机器已有直连 provider 会先备份再清理，只保留企业网关。
+
+<details>
+<summary>手动安装（分步）</summary>
+
+1. 安装并启动一次 [DSH Desktop](https://dshdesktop.cn)，退出
+2. PowerShell 执行：
+
+```powershell
+npm i -g pnpm
+cd $env:USERPROFILE\.dsh\profiles\desktop
 pnpm add dsh-enterprise
-# 再把 "dsh-enterprise" 加进 package.json 的 dsh.profile.bundles 数组，重启 DSH Desktop
 ```
 
-装好后打开 DSH 终端，登录页在 `/plugins/enterprise`——用户输入企业账号密码即可，不需要手动填任何地址或密钥。
+3. `package.json` 的 `dsh.profile.bundles` 加入 `"dsh-enterprise"`
+4. 启动 DSH Desktop，访问 `/plugins/enterprise` 登录
+
+</details>
+
+#### 原版 DSH（CLI，任意系统）
+
+```bash
+dsh plugin --profile ent add dsh-enterprise
+```
+
+启动后访问 Web 界面 `/plugins/enterprise` 登录。可选预填网关地址：
+
+```bash
+mkdir -p ~/.dsh/enterprise && echo "http://<网关IP>:8899" > ~/.dsh/enterprise/gateway-url.txt
+```
+
+> 企业批量部署：管理员在网关「插件市场」统一下发，用户端免装。
 
 ### 功能一览
 
@@ -90,7 +118,7 @@ pnpm add dsh-enterprise
 
 | 依赖 | 版本 / 说明 |
 | --- | --- |
-| DSH Desktop | 任意支持插件的版本 |
+| 运行环境 | [DSH Desktop](https://dshdesktop.cn)（任意支持插件的版本）或原版 DSH CLI |
 | Node.js | 仅从源码构建时需要 `^22.19.0` / `>=24.0.0`；npm 安装无需单独准备 |
 | npm 依赖 | **零依赖** — 构建脚本与运行时都不装任何包 |
 | 插件权限 | `fs:read` / `fs:write` / `net:loopback`（仅访问本机回环地址） |
@@ -134,30 +162,58 @@ Install this plugin into the user's DSH terminal and all of it just works:
 
 ### Installation
 
-**Mac one-line install (recommended — includes DSH Desktop, this plugin and all presets)**:
+Pick either runtime: [DSH Desktop](https://dshdesktop.cn) or stock DSH (CLI).
+
+#### macOS (12+) · DSH Desktop
+
+One command, lands on the sign-in page:
 
 ```bash
-curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- <gateway-url>
-# e.g. curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- http://192.168.1.10:8899
+curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- http://<gateway-ip>:8899
 ```
 
-The script handles everything: Node/pnpm detection & install (via Homebrew when missing, one admin password prompt) → latest DSH Desktop (dynamic version check + sha256 verification, auto-upgrade of old versions) → this plugin → presets (skip first-run wizard / advanced mode / gateway URL prefill / default workspace) → launches straight to the sign-in page. Idempotent and safe to re-run; never touches user session data. Requires macOS 12+, 2 GB disk, network access to GitHub/npm.
+e.g. `curl -fsSL https://www.fffly.com/mac-setup.sh | bash -s -- http://192.168.1.10:8899`
 
-In enterprise deployments the plugin is usually pushed to terminals by admins through the gateway's plugin marketplace — users install nothing themselves.
+#### Windows (10/11 x64) · DSH Desktop
 
-Manual install (prerequisite: global pnpm via `npm i -g pnpm`):
+One command, lands on the sign-in page (PowerShell, no admin required):
 
-```bash
-# Terminal/session profile: pick any <name>, auto-initialized on first use
-dsh plugin --profile ent add dsh-enterprise
+```powershell
+& ([scriptblock]::Create((irm https://www.fffly.com/windows-setup.ps1))) -GatewayUrl http://<gateway-ip>:8899
+```
 
-# DSH Desktop GUI: the desktop profile is reserved by the CLI, install manually
-cd ~/.dsh/profiles/desktop          # Windows: %USERPROFILE%\.dsh\profiles\desktop
+The script handles: portable Node/pnpm in the user directory → latest DSH Desktop (dynamic version check + sha256 verification, auto-upgrade) → this plugin → presets (zero dialogs/advanced mode/gateway URL prefill/default workspace) → launch landing on the sign-in page. Idempotent. On machines with existing direct-connect providers, they are backed up and removed, keeping only the enterprise gateway.
+
+<details>
+<summary>Manual install (step by step)</summary>
+
+1. Install [DSH Desktop](https://dshdesktop.cn), launch once, quit
+2. In PowerShell:
+
+```powershell
+npm i -g pnpm
+cd $env:USERPROFILE\.dsh\profiles\desktop
 pnpm add dsh-enterprise
-# then add "dsh-enterprise" to the dsh.profile.bundles array in package.json and restart DSH Desktop
 ```
 
-Once installed, open the DSH terminal and go to `/plugins/enterprise` — users just enter their enterprise account and password; no endpoint or key to fill in by hand.
+3. Add `"dsh-enterprise"` to `dsh.profile.bundles` in `package.json`
+4. Start DSH Desktop, sign in at `/plugins/enterprise`
+
+</details>
+
+#### Stock DSH (CLI, any OS)
+
+```bash
+dsh plugin --profile ent add dsh-enterprise
+```
+
+Sign in at `/plugins/enterprise` in the web UI. Optional, prefill the gateway URL:
+
+```bash
+mkdir -p ~/.dsh/enterprise && echo "http://<gateway-ip>:8899" > ~/.dsh/enterprise/gateway-url.txt
+```
+
+> Enterprise rollout: admins push the plugin from the gateway marketplace — no manual install.
 
 ### Features
 
@@ -174,7 +230,7 @@ Once installed, open the DSH terminal and go to `/plugins/enterprise` — users 
 
 | Dependency | Version / Notes |
 | --- | --- |
-| DSH Desktop | Any version that supports plugins |
+| Runtime | [DSH Desktop](https://dshdesktop.cn) (any plugin-capable version) or stock DSH CLI |
 | Node.js | Only needed when building from source: `^22.19.0` / `>=24.0.0`; the npm install needs no extra setup |
 | npm packages | **Zero dependencies** — neither build script nor runtime installs anything |
 | Plugin permissions | `fs:read` / `fs:write` / `net:loopback` (loopback only) |
