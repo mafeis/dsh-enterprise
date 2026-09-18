@@ -111,36 +111,57 @@ export function findProfileRoot() {
 }
 
 /** 定位宿主 desktop-cli 入口 + 引导宿主 exe（返回 { exe, entry } 或 null）。
- *  宿主进程内 process.execPath = DSH Desktop.exe，一级命中（entry 相对 exe 固定）；
- *  测试进程（纯 node）退化为扫 host-commands shim 反解宿主 exe 与 cli 入口。
- *  cli 入口在 app.asar 内部，Node 的 existsSync 看不见——只验 asar 包本体（Electron fs 才穿透 asar）。 */
+ *  宿主进程内 process.execPath = 宿主可执行文件，一级命中（entry 相对 exe 固定）；
+ *  测试进程（纯 node）退化为扫 shim 反解宿主 exe 与 cli 入口。
+ *  布局差异（2.0.11 起双平台包都不再带 app.asar，改为解包目录）：
+ *  - win32:  <exe 目录>\resources\app.asar | resources\app\lib\desktop-cli.js
+ *  - darwin: DSH Desktop.app/Contents/MacOS/DSH Desktop + Contents/Resources/app.asar|app/
+ *  cli 入口在 app.asar 内部时 Node 的 existsSync 看不见——asar 包本体存在即认为入口在。 */
 function desktopCliBootstrap() {
+  const pickEntry = (resDir) => {
+    if (existsSync(join(resDir, 'app.asar'))) return join(resDir, 'app.asar', 'lib', 'desktop-cli.js')
+    if (existsSync(join(resDir, 'app', 'lib', 'desktop-cli.js'))) return join(resDir, 'app', 'lib', 'desktop-cli.js')
+    return null
+  }
   try {
     const exe = process.execPath
-    if (/DSH Desktop\.exe$/i.test(exe) || existsSync(join(dirname(exe), 'resources', 'app.asar'))) {
-      return { exe, entry: join(dirname(exe), 'resources', 'app.asar', 'lib', 'desktop-cli.js') }
+    if (/DSH Desktop(\.exe)?$/i.test(exe)) {
+      const resDir = join(dirname(exe), 'resources')
+      const entry = pickEntry(resDir)
+      if (entry) return { exe, entry }
     }
   } catch { /* ignore */ }
   try {
-    const shimRoots = [
+    const shimCandidates = [
+      join(homedir(), '.local', 'bin', 'dsh'),                          // mac-setup.sh 写的 zsh shim
       join(homedir(), '.dsh-desktop-ent2', 'host-commands'),           // 已知重定向实例（保底）
       join(homedir(), 'AppData', 'Roaming', 'DSH Desktop', 'host-commands'),
     ]
-    for (const root of shimRoots) {
-      let kinds
-      try { kinds = readdirSync(root) } catch { continue }
-      for (const kind of kinds) {
-        const genDir = join(root, kind, 'generations')
-        let gens
-        try { gens = readdirSync(genDir) } catch { continue }
-        for (const g of gens) {
-          const shim = join(genDir, g, 'bin', 'dsh.cmd')
-          try {
-            const text = readFileSync(shim, 'utf8')
-            const m = text.match(/"([^"]+DSH Desktop\.exe)"[^"]*"([^"]+desktop-cli\.js)"/)
-            if (m && existsSync(m[1])) return { exe: m[1], entry: m[2] }
-          } catch { /* 下一个 */ }
+    for (const root of shimCandidates) {
+      let files = []
+      try {
+        if (root.endsWith('dsh')) files = [root]
+        else {
+          for (const kind of readdirSync(root)) {
+            let gens
+            try { gens = readdirSync(join(root, kind, 'generations')) } catch { continue }
+            for (const g of gens) {
+              for (const bin of ['dsh.cmd', 'dsh']) {
+                const shim = join(root, kind, 'generations', g, 'bin', bin)
+                if (existsSync(shim)) files.push(shim)
+              }
+            }
+          }
         }
+      } catch { continue }
+      for (const shim of files) {
+        try {
+          const text = readFileSync(shim, 'utf8')
+          const quoted = [...text.matchAll(/["']([^"']+)["']/g)].map((m) => m[1])
+          const exe = quoted.find((s) => /DSH Desktop(\.exe)?$/i.test(s) || /MacOS\/DSH Desktop$/.test(s))
+          const entry = quoted.find((s) => /desktop-cli\.js$/.test(s))
+          if (exe && entry && existsSync(exe)) return { exe, entry }
+        } catch { /* 下一个 */ }
       }
     }
   } catch { /* ignore */ }
