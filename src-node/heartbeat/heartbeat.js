@@ -14,6 +14,8 @@ import { repairConfigure } from '../auth/login.js'
 import { logoutLocal } from '../auth/logout.js'
 import { enforcePluginAllowlist, PROTECTED_PLUGINS, retryPendingPluginEntities } from '../enforce/plugin-enforce.js'
 import { peekCachedPolicy } from '../policy/policy.js'
+import { maybeSelfUpdate, compareSemver } from '../update/self-update.js'
+import { VERSION } from '../shared/version.js'
 import { statePath } from '../shared/paths.js'
 import { watch } from 'node:fs'
 import { dirname } from 'node:path'
@@ -267,6 +269,12 @@ export async function runHeartbeatOnce() {
       } else {
         // retryPendingPluginEntities 是同步函数（队列空时返回 undefined），不能挂 .catch——用 try/catch 兜底
         try { retryPendingPluginEntities() } catch { /* 残留实体重试失败不影响心跳 */ }
+      }
+      // 插件自动更新：网关插件仓库版本比本机新 → 后台静默安装（冷却/互斥在 self-update 内部），
+      // 装完 UI 提示重启；绝不降级、绝不影响心跳本身（fire-and-forget）
+      const repoLatest = rb.pluginLatest?.['dsh-enterprise']
+      if (repoLatest && compareSemver(repoLatest, VERSION) > 0) {
+        void maybeSelfUpdate(repoLatest, 'heartbeat').catch(() => { /* 更新失败不影响心跳 */ })
       }
       // 模型目录指纹：管理员在网关增删模型后（响应带 modelFingerprint），
       // 与本地记录不一致即自动重配 provider——无需用户手动"一键配置"或重新登录

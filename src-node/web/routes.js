@@ -30,6 +30,7 @@ import { fetchPolicySnapshot, resolvePluginInstallSpec, runPluginCli, findProfil
 import { PROTECTED_PLUGINS, isEnforceBusy, claimManifestOp, releaseManifestOp } from '../enforce/plugin-enforce.js'
 import { RULE_ENGINE_VERSION, runTextRules, runUrlRules, noteRuleRun, getRuleRuns, getRuleHits, isStepHookAlive, ruleHost } from '../rules/engine.js'
 import { currentHeartbeatState, runHeartbeatOnce, syncHeartbeatTimer } from '../heartbeat/heartbeat.js'
+import { pendingUpdateRestart } from '../update/self-update.js'
 import { repairConfigure, loginAndConfigure } from '../auth/login.js'
 import { logoutLocal } from '../auth/logout.js'
 import { LOGIN_PAGE_HTML } from './login-page.js'
@@ -332,6 +333,8 @@ export function createRoutes(ctx) {
             pendingRestart: (state.lastPluginCleanup?.names?.length
               && new Date(state.lastPluginCleanup.at) > new Date(Date.now() - process.uptime() * 1000))
               ? state.lastPluginCleanup : null,
+            // 自动更新待重启：本次进程启动后装好了新版本 → UI 提示重启生效
+            updatePending: pendingUpdateRestart(),
           },
         })
       },

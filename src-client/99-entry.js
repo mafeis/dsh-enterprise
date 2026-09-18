@@ -25,9 +25,11 @@
 				const overlayWatch = setInterval(() => {
 					void checkOverlay();
 					void checkViolationOverlay();
+					void checkUpdateBanner();
 				}, 5000);
 				cleanups.push(() => clearInterval(overlayWatch));
 				void checkViolationOverlay();
+				void checkUpdateBanner();
 				// 供其他模块在关键动作（立即检测/登出）后立即触发遮罩检查，不等下一轮轮询
 				window.__enterpriseCheckOverlay = checkOverlay;
 				cleanups.push(() => { delete window.__enterpriseCheckOverlay; });
