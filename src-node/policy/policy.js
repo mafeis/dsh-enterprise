@@ -183,7 +183,17 @@ export async function runPluginCli(args) {
   if (!boot) return { ok: false, error: '未找到宿主 DSH Desktop（无法执行插件安装/卸载）' }
   // ELECTRON_RUN_AS_NODE=1 让 DSH Desktop.exe 当纯 Node 跑 desktop-cli.js（与 host-commands shim 同一机制）；
   // DSH_HOME 钉回本进程 home——防任何中间层再写坏。
+  // PATH 补丁：desktop-cli 转发 pnpm 靠 PATH 解析。宿主若从短 PATH 环境（SSH 拉起/launchd/无登录 shell 的
+  // 远程会话）启动，PATH 里没有 pnpm 常见位置 → "pnpm failed"。补齐主流安装位（darwin/win32）。
+  const pathSep = process.platform === 'win32' ? ';' : ':'
+  const extra = process.platform === 'win32'
+    ? [join(process.env.APPDATA || join(dshHome(), 'AppData', 'Roaming'), 'npm')]
+    : ['/opt/homebrew/bin', '/usr/local/bin', join(dshHome(), '.local', 'bin')]
+  const curPath = process.env.PATH ?? ''
+  const segs = curPath.split(pathSep)
+  const missing = extra.filter((d) => !segs.includes(d) && existsSync(d))
   const env = { ...process.env, DSH_HOME: dshHome(), ELECTRON_RUN_AS_NODE: '1' }
+  if (missing.length) env.PATH = [...missing, ...segs].filter(Boolean).join(pathSep)
   const cliArgs = [boot.entry, 'plugin', '--profile', profileName, ...args]
   pluginLog(`[enterprise] plugin CLI: exe=${boot.exe} home=${env.DSH_HOME} args=${args.join(' ')}`)
   return new Promise((resolve) => {
