@@ -39,7 +39,10 @@ export function logoutLocal(reason = '用户登出') {
       // 无其他默认模型（或默认就是企业网关）→ 连 agent-default-model 一起删
       cleaned = cleaned.replace(/^agent-default-model:\s*\n(\s+.*\n?)+/m, '')
     }
-    cleaned = cleaned.replace(/(^llm-pi-ai:\s*\n)\s+providers:[^\n]*\n(?:(?!  [a-zA-Z]|\n)[^\n]*\n)*/m, '$1  providers: {}\n')
+    // ⚠ 停止条件必须包含顶层键（列 0 的非空白）：llm-deepseek: 紧跟在 llm-pi-ai 段后时，
+    //    旧正则会把它当作 providers 块的续行吞掉——块头被删但 `  models: []` 残留，
+    //    随后屏蔽段兜底检测"看不到 llm-deepseek"又插一份 → 重复键，Desktop 启动即崩（2026-09-18 Mac 实测）
+    cleaned = cleaned.replace(/(^llm-pi-ai:\s*\n)\s+providers:[^\n]*\n(?:(?!  [a-zA-Z]|\n)(?![^\s])[^\n]*\n)*/m, '$1  providers: {}\n')
     // 确保 llm-deepseek 屏蔽段存在：DSH 内置官方 deepseek provider 自带一整套 v4 模型目录，
     // 不屏蔽会在会话模型下拉里冒出来，绕过企业网关统一管控
     if (!/^llm-deepseek:\s*$/m.test(cleaned)) {
