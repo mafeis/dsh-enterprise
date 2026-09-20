@@ -69,7 +69,16 @@ body[data-ds-dark-theme] #enterprise-overlay { background: rgba(0,0,0,.62); }
 						//（旧安装未预写 skipped 标记），提示用户直接关掉即可，模型已可用。
 						$("enterprise-ok").innerHTML = t2("✓ 登录成功，模型已就绪", "✓ Signed in, models ready");
 						btn.textContent = t2("已配置 ✓", "Configured ✓");
-						setTimeout(() => location.reload(), 2600);
+						// 授权超限公告：登录成功即查即弹（每次登录都弹，无已读记录——超限状态被网关
+						// 解除后自然消失）。滞后到 reload 前 1.2s，横幅挂在 reload 后的页面上更持久。
+						void fetch("/api/enterprise/license-notice").then((r) => r.json()).then((d) => {
+							if (d && d.notice) {
+								sessionStorage.setItem("ent-license-notice", String(d.notice));
+								setTimeout(() => location.reload(), 1200);
+								return;
+							}
+							setTimeout(() => location.reload(), 2600);
+						}).catch(() => setTimeout(() => location.reload(), 2600));
 						return;
 					}
 					$("enterprise-err").textContent = b.error || t2("登录失败", "Sign-in failed");

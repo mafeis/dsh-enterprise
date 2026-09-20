@@ -47,8 +47,8 @@ export async function loginAndConfigure({ server, username, password }) {
   const token = body.token
   const user = body.user?.username ?? username
 
-  // 2. 拉模型清单（带元数据）
-  const modelsRes = await fetch(`${base}/v1/models`, { signal: AbortSignal.timeout(5000) })
+  // 2. 拉模型清单（带元数据；带票 → 网关按用户所在分组过滤模型可见性）
+  const modelsRes = await fetch(`${base}/v1/models`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) })
   const modelsBody = await modelsRes.json().catch(() => ({ data: [] }))
   const models = mapGatewayModels(modelsBody.data)
   if (!models.length) return { ok: false, error: '网关无可用模型' }
@@ -107,7 +107,7 @@ export async function repairConfigure() {
     const probe = await fetch(`${base}/auth/verify`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(5000) })
     const pv = await probe.json().catch(() => ({ valid: false }))
     if (!pv.valid) return { ok: false, error: '凭证已失效（已登出或被重置），请重新登录' }
-    const modelsRes = await fetch(`${base}/v1/models`, { signal: AbortSignal.timeout(5000) })
+    const modelsRes = await fetch(`${base}/v1/models`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) })
     const modelsBody = await modelsRes.json().catch(() => ({ data: [] }))
     const models = mapGatewayModels(modelsBody.data)
     if (!models.length) return { ok: false, error: '网关无可用模型' }

@@ -68,7 +68,7 @@ export function apply(ctx) {
         if (!st.gateway || !st.user) return // 从未登录过，不干预（首次登录走正常流程）
         const token = readToken()
         if (!token) return
-        fetch(`${st.gateway}/v1/models`, { signal: AbortSignal.timeout(6000) })
+        fetch(`${st.gateway}/v1/models`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(6000) })
           .then((r) => r.json().catch(() => ({ data: [] })))
           .then((b) => {
             const remote = (b.data ?? []).map((m) => `${m.id}::${m.display_name ?? m.id}`).sort()

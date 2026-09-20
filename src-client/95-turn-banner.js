@@ -108,12 +108,28 @@
 
 		// 公告检查：策略里的 type:"notice" 规则——进入页面即弹，弹一次；
 		// 已读记录存 localStorage（公告内容变了才重新弹）
+		// 另有网关 licenseNotice（商业授权超限公告）：登录成功即写入 sessionStorage，
+		// reload 后第一时间弹出；每轮轮询发现未展示的同款也再弹——它是"每次登录必现"
+		// 的隐藏公告，不写 localStorage 已读记录，也不出现在管理台公告编辑里
 		async function entNoticeCheck() {
 			try {
+				// 优先：授权超限公告（每次登录必弹；同屏只留一条）
+				const licNotice = sessionStorage.getItem("ent-license-notice");
+				if (licNotice) {
+					sessionStorage.removeItem("ent-license-notice");
+					entBannerShow({ kind: "notice", matched: t2("授权提醒", "License notice"), message: licNotice, style: null, blocked: false });
+					return;
+				}
 				const r = await fetch("/api/enterprise/policy");
 				if (!r.ok) return;
 				const d = await r.json();
-				const notices = ((d.policy ?? d)?.clientRules || []).filter((x) => x.type === "notice");
+				const pol = d.policy ?? d;
+				if (pol.licenseNotice) {
+					// 轮询中网关新报超限（如管理员刚停用授权码）：同样立即弹
+					entBannerShow({ kind: "notice", matched: t2("授权提醒", "License notice"), message: String(pol.licenseNotice), style: null, blocked: false });
+					return;
+				}
+				const notices = (pol.clientRules || []).filter((x) => x.type === "notice");
 				for (const n of notices) {
 					const key = "ent-notice-seen:" + (n.id ?? "") + ":" + String(n.value ?? "");
 					if (localStorage.getItem(key)) continue;
@@ -136,7 +152,8 @@
 					}
 				} catch { /* 拉不到则本轮用默认，下轮同步 */ }
 			})();
-			// 公告：启动 600ms 后立即查一次（进入即弹），之后每 5 分钟查一次（公告更新则再弹）
+			// 公告时序：启动 600ms 后立即查一次（进入即弹/登录 reload 后 sessionStorage 有存货则必弹），
+			// 之后每 5 分钟查一次（公告更新或新超限则再弹）
 			const noticeFirst = setTimeout(() => { void entNoticeCheck(); }, 600);
 			const noticePoll = setInterval(() => { void entNoticeCheck(); }, 5 * 60 * 1000);
 			cleanups.push(() => { clearTimeout(noticeFirst); clearInterval(noticePoll); entBannerRemove(); });

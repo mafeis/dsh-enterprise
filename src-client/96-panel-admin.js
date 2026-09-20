@@ -17,7 +17,7 @@
 			const tabs = [
 				{ id: "account", label: t("账号管理", "Account"), comp: AccountPanel },
 				{ id: "models", label: t("企业模型", "Models"), comp: ModelsPanel },
-				{ id: "usage", label: t("我的消耗", "Usage"), comp: UsagePanel },
+				{ id: "usage", label: t("用量与额度", "Usage"), comp: UsagePanel },
 				{ id: "plugins", label: t("插件管理", "Plugins"), comp: PluginGovernancePanel, alert: !!(status?.pluginGovernance?.violations?.length) },
 				{ id: "policy", label: t("规则管理", "Rules"), comp: EntPolicyPanel },
 			];

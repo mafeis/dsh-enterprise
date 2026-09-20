@@ -8,6 +8,7 @@
  *   POST /api/enterprise/heartbeat-config  心跳开关/间隔
  *   POST /api/enterprise/heartbeat-now     立即心跳
  *   GET  /api/enterprise/policy            网关下发的企业策略（只读透传）
+ *   GET  /api/enterprise/license-notice    商业授权超限公告（未超限 notice=null）
  *   GET  /api/enterprise/usage?days=       我的消耗（透传网关计费）
  *   GET  /api/enterprise/market            企业插件市场
  *   POST /api/enterprise/plugin-install    安装企业允许清单内的插件（事前拦截）
@@ -360,6 +361,23 @@ export function createRoutes(ctx) {
       },
     },
     {
+      // 商业授权超限公告（网关在 /policy/current 注入的 licenseNotice）：每次登录必弹，
+      // 不入 localStorage 已读记录；未超限时 notice 为 null，客户端不弹
+      kind: 'exact',
+      path: '/api/enterprise/license-notice',
+      methods: ['GET'],
+      handler: async ({ res }) => {
+        const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)) }
+        try {
+          const policy = await fetchPolicySnapshot()
+          const notice = policy?.licenseNotice ?? null
+          json(200, { ok: true, notice })
+        } catch (e) {
+          json(200, { ok: true, notice: null })   // 网关不可达不当阻塞登录流程
+        }
+      },
+    },
+    {
       kind: 'exact',
       path: '/api/enterprise/heartbeat-config',
       methods: ['POST'],
@@ -400,7 +418,12 @@ export function createRoutes(ctx) {
         // 优先实时拉网关目录（含 input_modes / thinking_levels 元数据）；网关不可达时退回本地缓存
         if (state.gateway) {
           try {
-            const r = await fetch(`${state.gateway}/v1/models`, { signal: AbortSignal.timeout(5000) })
+            // 带票 → 网关按用户所在分组过滤模型可见性
+            const token = readToken()
+            const r = await fetch(`${state.gateway}/v1/models`, {
+              headers: token ? { authorization: `Bearer ${token}` } : {},
+              signal: AbortSignal.timeout(5000),
+            })
             const b = await r.json().catch(() => ({}))
             if (r.ok && Array.isArray(b.data)) { models = b.data; source = 'gateway' }
           } catch { /* 网关不可达，走缓存 */ }
