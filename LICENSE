@@ -1,21 +1,85 @@
-MIT License
+DSH 企业版社区许可
+DSH Enterprise Community License（v1.0）
+
+版权所有 (c) 2026 mafeis
+
+本许可中英文两个版本效力相同；如有歧义，以中文版本为准。
+
+一、定义
+
+1. 「软件」：随本许可分发的 dsh-enterprise-gateway（企业网关）或 dsh-enterprise
+   （客户端插件）项目的源代码、构建产物及其副本，包括你作出的修改。
+2. 「机构」：法人、非法人组织、政府机关、事业单位、非营利组织或其他实体。
+3. 「机构人数」：机构全部人员的总数，含全职、兼职、实习、外包及劳务派遣人员，
+   以最近一个自然月内的最大在册人数为准；同一控制下的关联机构合并计算。
+   个人以自然人身份自用时，机构人数视为 1。
+
+二、授权条款
+
+1. 免费授权：机构人数不超过 30 人的机构，以及个人，可免费使用、复制、修改
+   和内部部署本软件。
+2. 商业授权：机构人数超过 30 人的机构，应在安装或使用本软件之前取得版权人的
+   商业授权。费用与条款由双方另行约定，联系方式：mafeis@gmail.com。
+3. 宽限期：因人数增长导致机构人数首次超过 30 的，自超过之日起 30 日内取得
+   商业授权的，此前期间不构成违约。
+4. 再分发：可原样再分发未修改的软件副本，但必须完整保留本许可文本与版权声明。
+   删除或改动许可/版权声明后再分发，或以本软件为基础对外提供产品与服务
+   （含托管、转售、OEM），须另行取得版权人书面许可。
+5. 修改版：修改版仅限本机构内部使用，并适用与原件相同的免费授权或商业授权条件。
+6. 声明保留：以任何形式分发本软件或其副本，均不得移除或遮盖其中的版权声明
+   与本许可标识。
+
+三、免责声明
+
+本软件按「现状」提供，不附带任何明示或默示的担保。作者或版权持有人不对因
+使用本软件而产生的任何索赔、损害或其他责任负责。
+
+---
+
+DSH Enterprise Community License (v1.0)
 
 Copyright (c) 2026 mafeis
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+The Chinese and English versions of this license are equally effective; in case
+of ambiguity, the Chinese version prevails.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Definitions
+
+1. "Software": the source code, build artifacts and copies of the
+   dsh-enterprise-gateway (enterprise gateway) or dsh-enterprise (client plugin)
+   project distributed with this license, including your modifications.
+2. "Organization": any legal entity, unincorporated organization, government
+   body, institution, non-profit or other entity.
+3. "Organization size": the total number of the organization's personnel,
+   including full-time, part-time, intern, outsourced and dispatched staff,
+   measured by the largest headcount on record within the most recent calendar
+   month; affiliated entities under common control are counted together.
+   A natural person using the Software personally counts as 1.
+
+2. Grant
+
+1. Free grant: organizations with 30 or fewer persons, and individuals, may
+   use, copy, modify and internally deploy the Software free of charge.
+2. Commercial license: an organization with more than 30 persons shall obtain
+   a commercial license from the copyright holder before installing or using
+   the Software. Fees and terms are subject to separate agreement;
+   contact: mafeis@gmail.com.
+3. Grace period: where headcount growth causes the organization size to exceed
+   30 for the first time, no breach occurs if a commercial license is obtained
+   within 30 days from the day of exceeding.
+4. Redistribution: you may redistribute unmodified copies of the Software
+   provided this license text and the copyright notice are retained in full.
+   Redistribution with the notices removed or altered, or offering products or
+   services (including hosting, resale, OEM) based on the Software, requires
+   prior written permission from the copyright holder.
+5. Modified versions: modified versions are for your organization's internal
+   use only and remain subject to the same free-grant or commercial-license
+   conditions as the original.
+6. Notices: you may not remove or obscure any copyright notice or license
+   marking contained in the Software, in whatever form it is distributed.
+
+3. Disclaimer
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+IMPLIED. IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
