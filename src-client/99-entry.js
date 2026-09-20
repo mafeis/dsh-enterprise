@@ -1,5 +1,25 @@
 		/* ============ 插件入口：登录遮罩 + 设置面板注册 + 模型页隐藏 ============ */
 
+		/* 企业管理导航图标：公文包轮廓（stroke=currentColor，随宿主选中态变色；样式对齐宿主 16px 1.25 描边）。
+		 * 宿主 SettingsRoot.navIcon 按 section id 硬编码映射、未知 id 一律回退设置齿轮，slot 注册项暂无 icon 字段，
+		 * 故在 scan() 里按分区标签文本定位按钮后整只替换 svg；data-ent-icon 防重入（替换动作会再触发 MutationObserver）。 */
+		const ENT_NAV_ICON_SVG = '<svg data-ent-icon="1" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">'
+			+ '<rect x="1.5" y="5" width="13" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.25"/>'
+			+ '<path d="M5.5 5V3.9c0-.77.63-1.4 1.4-1.4h2.2c.77 0 1.4.63 1.4 1.4V5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>'
+			+ '<rect x="6.75" y="8" width="2.5" height="2" rx="0.5" stroke="currentColor" stroke-width="1.25"/>'
+			+ '</svg>';
+
+		function swapEntNavIcon(btn) {
+			const svg = btn.querySelector("svg");
+			if (!svg || svg.dataset.entIcon === "1") return;
+			const tpl = document.createElement("template");
+			tpl.innerHTML = ENT_NAV_ICON_SVG;
+			const next = tpl.content.firstElementChild;
+			const cls = svg.getAttribute("class");
+			if (cls) next.setAttribute("class", cls);   // 保留宿主 navIcon 样式类（CSS module 哈希名，不能硬编码）
+			svg.replaceWith(next);
+		}
+
 		function apply(ctx) {
 			ctx.effect(() => {
 				let disposed = false;
@@ -95,14 +115,18 @@
 						} catch { /* 策略拉不到：沿用上一份 */ }
 						scan();
 					};
-					const scan = () => {
+				const scan = () => {
 						const navCells = document.querySelectorAll("nav button");
 						for (const btn of navCells) {
 							const label = btn.querySelector("span");
 							const txt = label && label.textContent.trim();
 							if (txt && policyLabels.has(txt)) {
 								btn.style.display = "none";
+								continue;
 							}
+							// 顺手换图标：宿主 navIcon 按 section id 映射、未知 id 落齿轮兜底（slot 注册项暂无 icon 字段），
+							// "企业管理" 撞了通用设置的齿轮——按标签文本定位本插件按钮，把兜底齿轮换成公文包轮廓
+							if (txt === t2("企业管理", "Enterprise")) swapEntNavIcon(btn);
 						}
 					};
 					const mo = new MutationObserver(() => scan());
