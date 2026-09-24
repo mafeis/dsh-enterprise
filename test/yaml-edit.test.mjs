@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { removeProviderFromSettingsYaml, syncOneMainSettingsProvider, profilePatchSettingsPaths } from '../src-node/settings/yaml-edit.js'
+import { removeProviderFromSettingsYaml, syncOneMainSettingsProvider, syncMainSettingsProvider, profilePatchSettingsPaths, syncEnterpriseProfilePatches, clearEnterpriseProfilePatches } from '../src-node/settings/yaml-edit.js'
 
 // 隔离环境：插件所有落盘都走 DSH_HOME / LOCALAPPDATA / ENT_SETTINGS_PATH，全部指向临时目录
 const sandbox = mkdtempSync(join(tmpdir(), 'enterprise-test-'))
@@ -89,7 +89,8 @@ test('syncOneMainSettingsProvider：providers: {} 内联空对象展开 + 思考
   assert.ok(text.includes('            off: none'))
   assert.ok(/            low: low/.test(text))
   // 非思考模型不写 reasoningEfforts
-  const fastBlock = text.slice(text.indexOf('- id: ent-fast'), text.indexOf('agent-default-model'))
+  // 双协议后 ent-fast 之后紧跟第二个 provider，切片到 ent-gateway-responses 为止
+  const fastBlock = text.slice(text.indexOf('- id: ent-fast'), text.indexOf('    ent-gateway-responses:'))
   assert.ok(!fastBlock.includes('reasoningEfforts'))
 })
 
@@ -152,6 +153,84 @@ test('profilePatchSettingsPaths：DSH_HOME 未设置时返回空数组', () => {
     assert.deepEqual(profilePatchSettingsPaths(), [])
   } finally {
     process.env.DSH_HOME = saved
+  }
+})
+
+test('syncOneMainSettingsProvider：双协议并存（completions + responses）', () => {
+  const target = join(sandbox, 'settings-dual-api.yaml')
+  writeFileSync(target, 'llm-pi-ai:\n  providers: {}\n', 'utf8')
+  syncOneMainSettingsProvider(target, 'http://gw:8900', MODELS)
+  const text = readFileSync(target, 'utf8')
+  assert.ok(text.includes('    ent-gateway:'))
+  assert.ok(text.includes('    ent-gateway-responses:'))
+  assert.ok(text.includes('      api: openai-completions'))
+  assert.ok(text.includes('      api: openai-responses'))
+  assert.equal((text.match(/      api: openai-completions/g) ?? []).length, 1)
+  assert.equal((text.match(/      api: openai-responses/g) ?? []).length, 1)
+  // 两个 provider 同模型同凭证
+  assert.equal((text.match(/- id: ent-chat/g) ?? []).length, 2)
+  assert.equal((text.match(/apiKeyEnv: ENT_GATEWAY_TOKEN_V2/g) ?? []).length, 2)
+})
+
+test('syncEnterpriseProfilePatches：profile patch 双协议 + reasoningEfforts dict', () => {
+  const file = join(sandbox, 'cordis.patch.yaml')
+  writeFileSync(file, JSON.stringify([{ id: 'other', config: { keep: true } }]), 'utf8')
+  process.env.ENT_PATCH_FILE = file
+  try {
+    const patchModels = [
+      { id: 'ent-chat', name: '企业对话', contextWindow: 128000, maxTokens: 32768, input: ['text', 'image'], reasoningEfforts: { off: 'none', low: 'low', high: 'high' } },
+      { id: 'ent-fast', contextWindow: 64000, maxTokens: 8192, input: ['text'] },
+    ]
+    syncEnterpriseProfilePatches('http://gw:8900', patchModels)
+    const doc = JSON.parse(readFileSync(file, 'utf8'))
+    const llm = doc.find((r) => r.id === 'llm-pi-ai')
+    assert.ok(llm, 'llm-pi-ai 行已写入')
+    assert.equal(llm.config.providers['ent-gateway'].api, 'openai-completions')
+    assert.equal(llm.config.providers['ent-gateway-responses'].api, 'openai-responses')
+    assert.deepEqual(llm.config.providers['ent-gateway-responses'].models[0].reasoningEfforts, { off: 'none', low: 'low', high: 'high' })
+    assert.equal(llm.config.providers['ent-gateway-responses'].models[1].reasoningEfforts, undefined)
+    assert.equal(doc.find((r) => r.id === 'other').config.keep, true, '用户已有行保留')
+    assert.ok(doc.find((r) => r.id === 'llm-deepseek'), '官方屏蔽段已写')
+    assert.ok(doc.find((r) => r.id === 'agent-default-model'), '默认模型行已写')
+
+    // 幂等：重复同步不变
+    const once = readFileSync(file, 'utf8')
+    syncEnterpriseProfilePatches('http://gw:8900', patchModels)
+    assert.equal(readFileSync(file, 'utf8'), once)
+
+    // 登出清理：两个 provider 都移除，骨架保留
+    clearEnterpriseProfilePatches()
+    const cleared = JSON.parse(readFileSync(file, 'utf8'))
+    const llmCleared = cleared.find((r) => r.id === 'llm-pi-ai')
+    assert.equal(llmCleared.config.providers['ent-gateway'], undefined)
+    assert.equal(llmCleared.config.providers['ent-gateway-responses'], undefined)
+    assert.ok(cleared.find((r) => r.id === 'other'), '用户已有行保留')
+  } finally {
+    delete process.env.ENT_PATCH_FILE
+  }
+})
+
+test('syncMainSettingsProvider：settings.yaml.imported 分支调用 dshHome 不抛错', () => {
+  const home = join(process.env.DSH_HOME, 'dsh-home-imported')
+  mkdirSync(home, { recursive: true })
+  const imported = join(home, 'settings.yaml.imported')
+  writeFileSync(imported, 'done', 'utf8')
+  process.env.DSH_HOME = home
+  const file = join(sandbox, 'cordis.patch.main.yaml')
+  writeFileSync(file, JSON.stringify([{ id: 'other', config: { keep: true } }]), 'utf8')
+  process.env.ENT_PATCH_FILE = file
+  try {
+    syncMainSettingsProvider('http://gw:8900', MODELS)
+    const doc = JSON.parse(readFileSync(file, 'utf8'))
+    const llm = doc.find((r) => r.id === 'llm-pi-ai')
+    assert.ok(llm, 'llm-pi-ai 行已写入')
+    assert.equal(llm.config.providers['ent-gateway'].api, 'openai-completions')
+    assert.equal(llm.config.providers['ent-gateway-responses'].api, 'openai-responses')
+    assert.ok(doc.find((r) => r.id === 'other').config.keep, '用户已有行保留')
+  } finally {
+    delete process.env.ENT_PATCH_FILE
+    rmSync(imported, { force: true })
+    process.env.DSH_HOME = sandbox
   }
 })
 

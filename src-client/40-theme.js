@@ -45,6 +45,12 @@ body {
   --ent-shadow-soft: 0 10px 34px rgba(0,0,0,.16);
   --ent-skel: linear-gradient(90deg,#eef1f6 25%,#f7f9fc 45%,#eef1f6 65%);
   --ent-wm-color: #0f172a;
+  --ent-radius: 12px;
+  --ent-radius-sm: 9px;
+  --ent-radius-xs: 6px;
+  --ent-gap: 16px;
+  --ent-gap-lg: 24px;
+  --ent-muted: #98a2b3;
 }
 body[data-ds-dark-theme] {
   --ent-fg: var(--dsw-alias-label-primary, #e9edf3);
@@ -86,11 +92,47 @@ body[data-ds-dark-theme] {
   --ent-shadow-soft: 0 10px 34px rgba(0,0,0,.55);
   --ent-skel: linear-gradient(90deg,rgba(255,255,255,.06) 25%,rgba(255,255,255,.12) 45%,rgba(255,255,255,.06) 65%);
   --ent-wm-color: #e9edf3;
+  --ent-radius: 12px;
+  --ent-radius-sm: 9px;
+  --ent-radius-xs: 6px;
+  --ent-gap: 16px;
+  --ent-gap-lg: 24px;
+  --ent-muted: #64748b;
 }
 /* 遮罩内表单控件：显式给底色/字色，避免深色模式沿用浏览器默认白底黑字 */
 #enterprise-overlay input {
   background: var(--ent-input-bg); color: var(--ent-fg); border-color: var(--ent-line); }
 #enterprise-overlay input::placeholder { color: var(--ent-fg-3); opacity: 1; }
+/* ===== 共享组件类（与网关侧对齐，值引用 --ent-* 令牌） ===== */
+.ent-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 160px; padding: 32px 24px; text-align: center; gap: 6px; }
+.ent-empty-state .ic { color: var(--ent-muted); margin-bottom: 4px; }
+.ent-empty-state .es-title { font-size: 14px; font-weight: 600; color: var(--ent-fg); }
+.ent-empty-state .es-desc { font-size: 12.5px; color: var(--ent-fg-2); max-width: 360px; }
+.ent-empty-state .btn { margin-top: 8px; }
+.ent-form-section h3 { font-size: 14px; font-weight: 600; color: var(--ent-fg); margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--ent-line); }
+.ent-form-section { margin-bottom: 20px; }
+.ent-action-bar { position: sticky; bottom: 0; background: var(--ent-box); border-top: 1px solid var(--ent-line); padding: 12px 0; display: flex; gap: 10px; justify-content: flex-end; z-index: 5; }
+@media (max-width: 640px) { .ent-action-bar { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); } }
+.ent-detail-drawer { background: var(--ent-box); border-top: 1px solid var(--ent-line); padding: 10px 14px; font-size: 12.5px; color: var(--ent-fg-2); }
+.ent-detail-drawer dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 0; }
+.ent-detail-drawer dt { color: var(--ent-fg-3); white-space: nowrap; }
+.ent-detail-drawer dd { margin: 0; word-break: normal; overflow-wrap: anywhere; color: var(--ent-fg); }
+@media (max-width: 640px) {
+  .ent-tbl-card table, table.ent-tbl-card { display: block; }
+  .ent-tbl-card thead { display: none; }
+  .ent-tbl-card tbody, .ent-tbl-card tr, .ent-tbl-card td { display: block; width: 100%; }
+  .ent-tbl-card tr { border: 1px solid var(--ent-line); border-radius: var(--ent-radius-sm); padding: 10px 12px; margin-bottom: 10px; }
+  .ent-tbl-card td { border-top: 0; padding: 4px 0; }
+  .ent-tbl-card td::before { content: attr(data-label); display: inline-block; width: 90px; color: var(--ent-fg-2); font-size: 12px; }
+  .ent-tbl-card td:first-child { white-space: normal; }
+}
+@media (max-width: 480px) {
+  .enterprise-panel { font-size: 13px !important; }
+  .enterprise-panel button { font-size: 13px !important; }
+  .enterprise-panel div[style*="display:flex"],
+  .enterprise-panel div[style*="display: flex"] { flex-direction: column !important; align-items: stretch !important; gap: var(--ent-gap); font-size: 13px !important; }
+}
+
 `;
 
 		function mountThemeStyle() {
@@ -113,9 +155,9 @@ body[data-ds-dark-theme] {
 			h3First: (color) => ({ margin: "0 0 8px", fontSize: 16, fontWeight: 600, color: "var(--ent-fg)", borderLeft: "4px solid " + (color || "var(--ent-accent)"), paddingLeft: 8 }),
 			card: { border: "1px solid var(--ent-line)", borderRadius: 10, padding: "10px 14px", margin: "6px 0", fontSize: 13, background: "var(--ent-surface)", color: "var(--ent-fg)" },
 			cardTitle: { fontWeight: 600, marginBottom: 6, fontSize: 13, color: "var(--ent-fg)" },
-			btn: { padding: "6px 14px", borderRadius: 8, border: "1px solid var(--ent-line)", background: "var(--ent-surface-3)", color: "var(--ent-fg)", cursor: "pointer", fontSize: 13, fontFamily: "inherit" },
+			btn: { minHeight: 36, padding: "6px 14px", borderRadius: 8, border: "1px solid var(--ent-line)", background: "var(--ent-surface-3)", color: "var(--ent-fg)", cursor: "pointer", fontSize: 13, fontFamily: "inherit" },
 			btnPrimary: { background: "var(--ent-accent)", color: "var(--ent-accent-ink)", border: "1px solid var(--ent-accent)" },
-			btnDangerText: { border: "none", background: "transparent", color: "var(--ent-bad)", cursor: "pointer", fontSize: 13, fontFamily: "inherit", padding: "6px 10px" },
+			btnDangerText: { minHeight: 36, border: "none", background: "transparent", color: "var(--ent-bad)", cursor: "pointer", fontSize: 13, fontFamily: "inherit", padding: "6px 10px" },
 			input: { width: "100%", border: "1px solid var(--ent-line)", borderRadius: 8, padding: "8px 12px", marginBottom: 8, boxSizing: "border-box", fontFamily: "inherit", fontSize: 13, outline: "none", background: "var(--ent-input-bg)", color: "var(--ent-fg)" },
 			row: { display: "flex", alignItems: "center", gap: 10, margin: "6px 0", fontSize: 13 },
 			label: { width: 88, color: "var(--ent-fg-2)", flexShrink: 0 },

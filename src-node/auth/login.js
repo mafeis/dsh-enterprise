@@ -14,20 +14,34 @@ import { readState, saveState, readToken } from '../state/state.js'
 
 /** 网关 /v1/models → DSH provider 模型定义（登录与修复共用同一映射） */
 export function mapGatewayModels(data) {
-  return (data ?? []).map((m) => ({
-    id: m.id,
-    // DSH 选择器显示用：网关 displayName 优先，缺失回退 id
-    ...(m.display_name ? { name: m.display_name } : {}),
-    contextWindow: m.context_window ?? 128000,
-    maxTokens: m.max_tokens ?? 32768,
-    // DSH llm-pi-ai 的 input schema 只接受 text/image（MODALITIES 白名单）；
-    // 写入 audio/video 等其他模态会让整个 llm-pi-ai 段校验失败、命名空间不注册、
-    // 所有企业模型从选择器消失——必须过滤到白名单内。
-    input: (Array.isArray(m.input_modes) && m.input_modes.length ? m.input_modes : ['text'])
-      .filter((x) => x === 'text' || x === 'image'),
-    input_modes: m.input_modes,
-    thinking_levels: m.thinking_levels,
-  }))
+  const reasoningEfforts = (levels) => {
+    if (!Array.isArray(levels) || !levels.length) return undefined
+    // DSH 0.1.7 profile patch 的 reasoningEfforts 是 dict（档位→wire 值），不是 list。
+    // 这里与旧 settings.yaml 写入保持同一白名单，避免未知档位把整段配置拒掉。
+    const wire = { off: 'none', minimal: 'minimal', low: 'low', medium: 'medium', high: 'high', xhigh: 'xhigh', max: 'max' }
+    const beyondOff = levels.filter((lv) => lv !== 'off' && lv in wire)
+    if (!beyondOff.length) return undefined
+    return { off: 'none', ...Object.fromEntries(beyondOff.map((lv) => [lv, wire[lv]])) }
+  }
+  return (data ?? []).map((m) => {
+    const efforts = reasoningEfforts(m.thinking_levels)
+    return {
+      id: m.id,
+      // DSH 选择器显示用：网关 displayName 优先，缺失回退 id
+      ...(m.display_name ? { name: m.display_name } : {}),
+      contextWindow: m.context_window ?? 128000,
+      maxTokens: m.max_tokens ?? 32768,
+      // DSH llm-pi-ai 的 input schema 只接受 text/image（MODALITIES 白名单）；
+      // 写入 audio/video 等其他模态会让整个 llm-pi-ai 段校验失败、命名空间不注册、
+      // 所有企业模型从选择器消失——必须过滤到白名单内。
+      input: (Array.isArray(m.input_modes) && m.input_modes.length ? m.input_modes : ['text'])
+        .filter((x) => x === 'text' || x === 'image'),
+      // 新版 DSH profile patch 用 reasoningEfforts；旧 settings.yaml 仍用 thinking_levels
+      ...(efforts ? { reasoningEfforts: efforts } : {}),
+      input_modes: m.input_modes,
+      thinking_levels: m.thinking_levels,
+    }
+  })
 }
 
 /** 登录并写配置的核心逻辑 */

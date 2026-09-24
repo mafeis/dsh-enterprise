@@ -21,6 +21,14 @@ export function writeProviderConfig(base, models) {
     compat: { thinkingFormat: 'openai' },
     models,
   }
+  // 双协议并存：Responses API 通道（/v1/responses），默认仍走 completions
+  settings.providers['ent-gateway-responses'] = {
+    displayName: '企业统一模型网关 Responses',
+    api: 'openai-responses',
+    apiKeyEnv: GATEWAY_KEY_REF,
+    baseUrl: base,
+    models,
+  }
   writeTextAtomic(settingsPath, JSON.stringify(settings, null, 2))
   // 同步主 settings.yaml（llm-pi-ai 运行时从这里解析 provider）——与 logout 的清理对称
   syncMainSettingsProvider(base, models)

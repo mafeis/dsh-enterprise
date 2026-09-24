@@ -19,6 +19,13 @@
 			"market.localInstalled": { zh: "本机已安装", en: "Installed on this machine" },
 			"market.noneInstalled": { zh: "无", en: "None" },
 			"market.unreadable": { zh: "无法读取安装清单（非 profile 安装形态）", en: "Cannot read installed list (non-profile install)" },
+			"market.canInstall": { zh: "可安装", en: "Available" },
+			"market.detail": { zh: "详情", en: "Details" },
+			"market.less": { zh: "收起", en: "Less" },
+			"market.fullName": { zh: "插件包名", en: "Package" },
+			"market.fullDesc": { zh: "插件介绍", en: "Description" },
+			"market.confirmUninstallTitle": { zh: "卸载插件 {name}", en: "Uninstall {name}" },
+			"market.confirmUninstallMsg": { zh: "卸载会写入配置并落盘，重启 DSH 后完全退出该插件。确定卸载？", en: "Uninstall saves to config and takes full effect after restarting DSH. Continue?" },
 			"market.okUpgrade": { zh: "已热更新生效（dsh-hot-reload 在线，稍候几秒自动替换运行中实例）", en: "Hot-updated (dsh-hot-reload active; the running instance swaps in a few seconds)" },
 			"market.okRestart": { zh: "已安装 · 重启 DSH 后生效（首次新增的插件需要重启加载）", en: "Installed · takes effect after restarting DSH (first-time installs need a restart)" },
 			"market.controlTitle": { zh: "插件管控", en: "Plugin Governance" },
@@ -35,6 +42,7 @@
 			const [installMsg, setInstallMsg] = react.useState("");
 			const [installing, setInstalling] = react.useState("");
 			const [uninstalling, setUninstalling] = react.useState("");
+			const [expanded, setExpanded] = react.useState(() => new Set());
 			react.useEffect(() => {
 				let alive = true;
 				apiGet("/api/enterprise/market").then((r) => { if (alive) setMarket(r); }).catch(() => { if (alive) setMarket({ ok: false, items: [] }); });
@@ -85,10 +93,20 @@
 			const items = market?.items;
 			// 允许清单为空 = 不限装 → 保留手输安装入口
 			const unrestricted = Array.isArray(items) && market.ok === true && items.length === 0 && !g.allowedUnknown;
+			const installedCount = (items || []).filter((x) => x.installed).length;
+			const toggleExpand = (name) => setExpanded((prev) => {
+				const next = new Set(prev);
+				next.has(name) ? next.delete(name) : next.add(name);
+				return next;
+			});
 
 			return reactJsx.jsxs("div", { style: UI.page, children: [
 				reactJsx.jsx("h3", { style: UI.h3First(), children: t("market.title") }),
 				reactJsx.jsx("p", { style: Object.assign({}, UI.dim, { margin: "0 0 10px" }), children: t("market.subtitle") }),
+				!items ? null : reactJsx.jsxs("div", { style: { display: "flex", gap: 6, marginBottom: 10 }, children: [
+					UI.infoBadge(t("market.canInstall") + " · " + items.length),
+					UI.okBadge(t("market.installed") + " · " + installedCount)
+				] }),
 				violations.length > 0 && g.enforceMode !== "off"
 					? UI.alertBar(t(g.enforceMode === "warn" ? "market.violationsWarn" : "market.violations", { n: violations.length, list: violations.join("、") }))
 					: null,
@@ -98,22 +116,36 @@
 				!items
 					? reactJsx.jsx(UI.skeleton, { lines: 3 })
 					: items.length || unrestricted
-						? reactJsx.jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 10 }, children: [
-							...items.map((it) => reactJsx.jsxs("div", { style: Object.assign({}, UI.card, { margin: 0, display: "flex", flexDirection: "column", gap: 6 }), children: [
-								reactJsx.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
-									reactJsx.jsx("b", { style: { fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, title: it.name, children: it.name }),
-									it.installed ? UI.okBadge(t("market.installed")) : null
-								] }),
-								(() => {
-									const desc = loc === "zh" ? (it.descriptionZh || it.description || it.descriptionEn) : (it.descriptionEn || it.descriptionZh || it.description);
-									return desc
-										? reactJsx.jsx("div", { style: Object.assign({}, UI.dim, { flex: 1, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }), children: desc })
-										: reactJsx.jsx("div", { style: Object.assign({}, UI.dim, { flex: 1 }), children: t("market.noDesc") });
-								})(),
-								it.installed
-								? reactJsx.jsx("button", { style: Object.assign({}, UI.btn, { width: "100%" }), disabled: uninstalling !== "" || installing !== "", onClick: () => doUninstall(it.name), children: uninstalling === it.name ? t("market.uninstalling") : t("market.uninstall") })
-								: reactJsx.jsx("button", { style: Object.assign({}, UI.btn, UI.btnPrimary, { width: "100%" }), disabled: installing !== "" || uninstalling !== "", onClick: () => doInstall(it.name), children: installing === it.name ? t("market.installing") : t("market.install") })
-							] }, it.name)),
+						? reactJsx.jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 10 }, children: [
+							...items.map((it) => {
+								const desc = loc === "zh" ? (it.descriptionZh || it.description || it.descriptionEn) : (it.descriptionEn || it.descriptionZh || it.description);
+								const open = expanded.has(it.name);
+								return reactJsx.jsxs("div", { style: Object.assign({}, UI.card, { margin: 0, display: "flex", flexDirection: "column", gap: 6 }), children: [
+									reactJsx.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+										reactJsx.jsx("b", { style: { fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, title: it.name, children: it.name }),
+										it.installed ? UI.okBadge(t("market.installed")) : null
+									] }),
+									(() => {
+										const body = desc || t("market.noDesc");
+										return reactJsx.jsx("div", {
+											style: Object.assign({}, UI.dim, { flex: "none", display: open ? "block" : "-webkit-box", WebkitLineClamp: open ? "unset" : 3, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.6, cursor: desc ? "pointer" : "default" }),
+											title: desc || "",
+											onClick: () => desc && toggleExpand(it.name),
+											children: body
+										});
+									})(),
+									open ? reactJsx.jsx("div", { style: UI.hint, children: t("market.fullName") + "：" + it.name }) : null,
+									reactJsx.jsx("div", { style: { display: "flex", gap: 8, marginTop: 2 }, children: [
+										desc ? reactJsx.jsx("button", { style: Object.assign({}, UI.btn, { flex: 1, fontSize: 12.5 }), onClick: () => toggleExpand(it.name), children: open ? t("market.less") : t("market.detail") }) : null,
+										it.installed
+											? reactJsx.jsx("button", { style: Object.assign({}, UI.btn, { flex: desc ? 1 : "100%" }), disabled: uninstalling !== "" || installing !== "", onClick: async () => {
+												const ok = await mountConfirmDialog({ title: t("market.confirmUninstallTitle", { name: it.name }), message: t("market.confirmUninstallMsg"), confirmText: t("market.uninstall") });
+												if (ok) doUninstall(it.name);
+											}, children: uninstalling === it.name ? t("market.uninstalling") : t("market.uninstall") })
+											: reactJsx.jsx("button", { style: Object.assign({}, UI.btn, UI.btnPrimary, { flex: desc ? 1 : "100%" }), disabled: installing !== "" || uninstalling !== "", onClick: () => doInstall(it.name), children: installing === it.name ? t("market.installing") : t("market.install") })
+									] })
+								] }, it.name);
+							}),
 							unrestricted ? reactJsx.jsxs("div", { style: Object.assign({}, UI.card, { margin: 0 }), children: [
 								reactJsx.jsx("div", { style: UI.cardTitle, children: t("market.other") }),
 								reactJsx.jsx("div", { style: UI.dim, children: t("market.unrestricted") }),

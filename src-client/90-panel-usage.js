@@ -36,7 +36,7 @@
 			};
 			const rangeLabel = usageDays === 1 ? t("当天", "Today") : usageDays === 7 ? t("近 7 日", "Last 7 days") : t("近 30 天", "Last 30 days");
 			const maxReq = Math.max(1, ...(usage?.byModel || []).map((r) => r.requests || 0));
-			return reactJsx.jsxs("div", { style: UI.page, children: [
+		return reactJsx.jsxs("div", { className: "enterprise-panel", style: UI.page, children: [
 				reactJsx.jsx("h3", { style: UI.h3First(), children: t("用量与额度", "Usage & quota") }),
 				reactJsx.jsxs("div", { style: { display: "flex", gap: 6, alignItems: "center", margin: "0 0 10px" }, children: [
 					[1, 7, 30].map((d) => {
@@ -44,7 +44,7 @@
 						return reactJsx.jsx("button", {
 							key: d,
 							style: {
-								padding: "5px 14px", borderRadius: 99, fontSize: 12.5, fontFamily: "inherit", cursor: "pointer",
+								minHeight: 36, padding: "5px 14px", borderRadius: 99, fontSize: 12.5, fontFamily: "inherit", cursor: "pointer",
 								border: "1px solid " + (active ? "var(--ent-accent)" : "var(--ent-line)"),
 								background: active ? "var(--ent-accent)" : "var(--ent-surface-3)",
 								color: active ? "var(--ent-accent-ink)" : "var(--ent-fg-2)",
@@ -71,16 +71,12 @@
 										reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: "var(--ent-fg)" }, UI.num), children: fmtNum(s.requests) })
 									] }),
 									reactJsx.jsxs("div", { children: [
-										reactJsx.jsx("div", { style: { fontSize: 11.5, color: "var(--ent-fg-3)" }, children: t("输入 tokens", "Input tokens") }),
-										reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: "var(--ent-fg)" }, UI.num), children: fmtNum(s.tokens_in) })
+										reactJsx.jsx("div", { style: { fontSize: 11.5, color: "var(--ent-fg-3)" }, children: t("Token 总消耗", "Total tokens") }),
+										reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: "var(--ent-fg)" }, UI.num), children: fmtNum(total) })
 									] }),
 									reactJsx.jsxs("div", { children: [
-										reactJsx.jsx("div", { style: { fontSize: 11.5, color: "var(--ent-fg-3)" }, children: t("输出 tokens", "Output tokens") }),
-										reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: "var(--ent-fg)" }, UI.num), children: fmtNum(s.tokens_out) })
-									] }),
-									reactJsx.jsxs("div", { children: [
-										reactJsx.jsx("div", { style: { fontSize: 11.5, color: "var(--ent-fg-3)" }, children: rangeLabel + t("合计", " total") }),
-										reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: "var(--ent-accent)" }, UI.num), children: fmtNum(total) })
+										reactJsx.jsx("div", { style: { fontSize: 11.5, color: "var(--ent-fg-3)" }, children: t("拦截请求", "Blocked requests") }),
+										reactJsx.jsx("div", { style: Object.assign({ fontSize: 18, fontWeight: 600, color: "var(--ent-fg)" }, UI.num), children: fmtNum(s.blocked ?? 0) })
 									] })
 								] }),
 								s.blocked ? reactJsx.jsx("div", { style: Object.assign({ marginTop: 8 }, UI.dim), children:
@@ -109,7 +105,7 @@
 										reactJsx.jsxs("span", { style: { fontSize: 12, color: "var(--ent-fg-2)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }, children: [fmt(used), " / ", fmt(limit)] })
 									] }, label);
 								};
-								return reactJsx.jsxs("div", { style: UI.card, children: [
+								return reactJsx.jsxs("div", { className: "ent-usage-detail", style: UI.card, children: [
 									reactJsx.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }, children: [
 										reactJsx.jsx("span", { style: UI.cardTitle, children: t("额度", "Quota") }),
 										reactJsx.jsx("span", { style: { fontSize: 11.5, borderRadius: 99, padding: "2px 10px", color: "var(--ent-fg-2)", background: "var(--ent-badge-dim-bg)" }, children: q.group })
@@ -119,7 +115,7 @@
 											const active = cur.key === w.key;
 											return reactJsx.jsx("button", {
 												style: {
-													padding: "4px 12px", borderRadius: 99, fontSize: 12, fontFamily: "inherit", cursor: "pointer",
+													minHeight: 36, padding: "4px 12px", borderRadius: 99, fontSize: 12, fontFamily: "inherit", cursor: "pointer",
 													border: "1px solid " + (active ? "var(--ent-accent)" : "var(--ent-line)"),
 													background: active ? "var(--ent-accent)" : "var(--ent-surface-3)",
 													color: active ? "var(--ent-accent-ink)" : "var(--ent-fg-2)",
@@ -132,25 +128,28 @@
 									}) : null,
 									hasTok ? row(cur.tok, q.used?.[kTok] ?? 0, q.limits[kTok], fmtM) : null,
 									hasAmt ? row(cur.amt, q.used?.[kAmt] ?? 0, q.limits[kAmt], fmtY) : null,
-									reactJsx.jsx("div", { style: Object.assign({ marginTop: 4 }, UI.hint), children: t("额度按分组每人独立计算，任一超限返回 429", "Quota is per user within the group; 429 when any limit is exceeded") })
+									reactJsx.jsx("div", { style: Object.assign({ marginTop: 4 }, UI.hint), children: t("额度按分组每人独立计算，任一超限返回 429", "Quota is per user within the group; 429 when any limit is exceeded") }),
+									reactJsx.jsx("div", { style: { height: 1, background: "var(--ent-line)", margin: "12px 0" } }),
+									reactJsx.jsxs("div", { style: UI.cardTitle, children: [t("模型明细", "Model details")] }),
+									(usage.byModel || []).length > 0 ? reactJsx.jsxs("table", { className: "ent-tbl-card", style: Object.assign({}, UI.tbl, { margin: 0 }), children: [
+										reactJsx.jsx("thead", { children: reactJsx.jsxs("tr", { children: [
+											reactJsx.jsx("th", { style: UI.cellHead, children: t("模型", "Model") }),
+											reactJsx.jsx("th", { style: UI.cellHead, children: t("占比", "Share") }),
+											reactJsx.jsx("th", { style: UI.cellHead, children: t("调用", "Calls") }),
+											reactJsx.jsx("th", { style: UI.cellHead, children: t("Token 总消耗", "Total tokens") })
+										] }) }),
+										reactJsx.jsx("tbody", { children: usage.byModel.map((r) => {
+											const modelTokens = (r.tokens_in ?? 0) + (r.tokens_out ?? 0);
+											return reactJsx.jsxs("tr", { children: [
+												reactJsx.jsx("td", { "data-label": t("模型", "Model"), style: Object.assign({}, UI.cell, { fontWeight: 500 }), children: r.model || "—" }),
+												reactJsx.jsx("td", { "data-label": t("占比", "Share"), style: Object.assign({}, UI.cell, { width: "30%" }), children: reactJsx.jsx("div", { style: { height: 6, borderRadius: 99, background: "var(--ent-track)", overflow: "hidden" }, children: reactJsx.jsx("div", { style: { height: "100%", width: Math.max(2, Math.round((r.requests || 0) / maxReq * 100)) + "%", background: "var(--ent-accent)", borderRadius: 99 } }) }) }),
+												reactJsx.jsx("td", { "data-label": t("调用", "Calls"), style: Object.assign({}, UI.cell, UI.num), children: fmtNum(r.requests) }),
+												reactJsx.jsx("td", { "data-label": t("Token 总消耗", "Total tokens"), style: Object.assign({}, UI.cell, UI.num), children: fmtNum(modelTokens) })
+											] }, r.model);
+										}) })
+									] }) : null
 								] });
 							})() : null,
-							(usage.byModel || []).length > 0 ? reactJsx.jsx("div", { style: Object.assign({}, UI.card, { padding: "6px 14px" }), children: reactJsx.jsxs("table", { style: Object.assign({}, UI.tbl, { margin: 0 }), children: [
-								reactJsx.jsx("thead", { children: reactJsx.jsxs("tr", { children: [
-									reactJsx.jsx("th", { style: UI.cellHead, children: t("模型", "Model") }),
-									reactJsx.jsx("th", { style: UI.cellHead, children: t("占比", "Share") }),
-									reactJsx.jsx("th", { style: UI.cellHead, children: t("调用", "Calls") }),
-									reactJsx.jsx("th", { style: UI.cellHead, children: t("输入 tok", "In tok") }),
-									reactJsx.jsx("th", { style: UI.cellHead, children: t("输出 tok", "Out tok") })
-								] }) }),
-								reactJsx.jsx("tbody", { children: usage.byModel.map((r) => reactJsx.jsxs("tr", { children: [
-									reactJsx.jsx("td", { style: Object.assign({}, UI.cell, { fontWeight: 500 }), children: r.model || "—" }),
-									reactJsx.jsx("td", { style: Object.assign({}, UI.cell, { width: "30%" }), children: reactJsx.jsx("div", { style: { height: 6, borderRadius: 99, background: "var(--ent-track)", overflow: "hidden" }, children: reactJsx.jsx("div", { style: { height: "100%", width: Math.max(2, Math.round((r.requests || 0) / maxReq * 100)) + "%", background: "var(--ent-accent)", borderRadius: 99 } }) }) }),
-									reactJsx.jsx("td", { style: Object.assign({}, UI.cell, UI.num), children: fmtNum(r.requests) }),
-									reactJsx.jsx("td", { style: Object.assign({}, UI.cell, UI.num), children: fmtNum(r.tokens_in) }),
-									reactJsx.jsx("td", { style: Object.assign({}, UI.cell, UI.num), children: fmtNum(r.tokens_out) })
-								] }, r.model)) })
-							] }) }) : null
 						] })
 					})()
 			] });

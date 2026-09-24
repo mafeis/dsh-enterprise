@@ -127,6 +127,12 @@ node test/test-enforce.mjs            # 插件管控端到端冒烟
 
 </details>
 
+### 新版 DSH 兼容性
+
+- DSH 0.1.7+ 会把旧 `settings.yaml` 导入当前 profile 的 `cordis.patch.yml` 并改名；本插件同时写旧路径与新路径，检测到导入完成后只走 profile patch
+- 双协议并存：登录/修复同时写 `ent-gateway`（`openai-completions`，默认）与 `ent-gateway-responses`（`openai-responses`，走网关 `/v1/responses`），同模型同凭证；登出两条通道一起清理
+- 插件包新增 `locale/en.json`、`locale/zh.json`、`icon` 与 `dsh.manifestVersion: 1`，适配新版插件管理页
+
 ### 文档
 
 | 文档 | 内容 |

@@ -14,6 +14,9 @@ test('mapGatewayModels：input 过滤到 text/image 白名单（红线：video/a
   assert.equal(out[0].contextWindow, 200000)
   assert.equal(out[0].maxTokens, 65536)
   assert.deepEqual(out[0].thinking_levels, ['off', 'low', 'high'])
+  assert.deepEqual(out[0].reasoningEfforts, { off: 'none', low: 'low', high: 'high' })
+  assert.equal(out[1].reasoningEfforts, undefined)
+  assert.equal(out[2].reasoningEfforts, undefined)
   assert.deepEqual(out[1].input, ['text'])
   assert.deepEqual(out[2].input, ['text'])
   assert.equal(out[2].contextWindow, 128000)   // 缺省

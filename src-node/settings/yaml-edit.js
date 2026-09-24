@@ -10,7 +10,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeTextAtomic } from '../shared/fs-utils.js'
-import { dshSettingsFile } from '../shared/paths.js'
+import { dshHome, dshSettingsFile } from '../shared/paths.js'
 import { ctxLoggerInfoSafe } from '../shared/log.js'
 import { GATEWAY_KEY_REF } from './provider-config.js'
 
@@ -57,6 +57,11 @@ export function removeProviderFromSettingsYaml(text, providerName) {
  * 行级操作：已有 ent-gateway 块则先删再插（保持位置在 providers: 之后），没有则直接插入。
  */
 export function syncMainSettingsProvider(base, models) {
+  // 新版 DSH（0.1.7+）配置面：settings.yaml 已被导入并改名，profile patch 是权威 settings 存储层
+  if (existsSync(join(dshHome(), 'settings.yaml.imported'))) {
+    syncEnterpriseProfilePatches(base, models)
+    return
+  }
   // Desktop 多实例场景：每个 profile 有自己的 settings.yaml（cordis.patch.yml 的
   // settings entry 指向它）。ENT_SETTINGS_PATH 只覆盖 CLI 启动方式；Desktop 启动
   // 时不带该变量，dshSettingsFile() 会落到 home 根的共享 settings.yaml——而
@@ -67,6 +72,8 @@ export function syncMainSettingsProvider(base, models) {
   for (const mainSettings of targets) {
     syncOneMainSettingsProvider(mainSettings, base, models)
   }
+  // 新版 DSH（0.1.7+）配置面：profile patch 也是权威 settings 存储层
+  syncEnterpriseProfilePatches(base, models)
 }
 
 /**
@@ -99,6 +106,178 @@ export function profilePatchSettingsPaths() {
   }
 }
 
+/**
+ * 当前插件安装所在 profile 的 cordis.patch.yml（新版 DSH 配置面）。
+ * 插件自身位于 profile node_modules/.ent-plugin-cache 下，向上找含
+ * dsh.profile.bundles 的 package.json 即 profile 根目录。
+ */
+function profileRootFromModule() {
+  try {
+    let p = new URL('.', import.meta.url)
+    for (let i = 0; i < 6; i++) {
+      p = new URL('../', p)
+      const dir = decodeURIComponent(p.pathname.replace(/^\/([A-Za-z]:)/, '$1'))
+      const pkgPath = join(dir, 'package.json')
+      if (!existsSync(pkgPath)) continue
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+        if (Array.isArray(pkg?.dsh?.profile?.bundles)) return dir
+      } catch { /* 下一个目录 */ }
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
+/** 新版 DSH 的 profile patch 文件列表（通常只有一个）。
+ *  ENT_PATCH_FILE 仅供测试注入，生产始终从插件安装位置向上解析。 */
+export function profilePatchFiles() {
+  if (process.env.ENT_PATCH_FILE) return [process.env.ENT_PATCH_FILE]
+  const root = profileRootFromModule()
+  return root ? [join(root, 'cordis.patch.yml')] : []
+}
+
+/** 读取 profile patch 顶层 YAML 数组（JSON 是 YAML 子集；支持整行注释头）。 */
+function readProfilePatchDoc(file) {
+  const raw = readFileSync(file, 'utf8').replace(/^\uFEFF/, '')
+  const comments = []
+  const bodyLines = []
+  for (const line of raw.split('\n')) {
+    if (/^\s*#/.test(line)) comments.push(line)
+    else bodyLines.push(line)
+  }
+  const body = bodyLines.join('\n').trim()
+  if (!body) return { comments, rows: [] }
+  try {
+    const rows = JSON.parse(body)
+    if (!Array.isArray(rows)) return null
+    return { comments, rows }
+  } catch {
+    return null
+  }
+}
+
+/** 写回 profile patch：保留整行注释头，正文用 JSON 数组（合法 YAML） */
+function writeProfilePatchDoc(file, comments, rows) {
+  const head = comments.length ? comments.join('\n') + '\n' : ''
+  writeTextAtomic(file, head + JSON.stringify(rows, null, 2) + '\n')
+}
+
+/** 按 id 合并 patch 行；config 是完整替换语义，只合并我们控制的子键 */
+function mergePatchRows(rows, wantedRows) {
+  const next = JSON.parse(JSON.stringify(rows))
+  for (const wanted of wantedRows) {
+    const idx = next.findIndex((r) => r && r.id === wanted.id && !r.insert)
+    if (idx === -1) next.push(JSON.parse(JSON.stringify(wanted)))
+    else next[idx] = { ...next[idx], ...wanted, config: { ...(next[idx].config ?? {}), ...(wanted.config ?? {}) } }
+  }
+  return next
+}
+
+/** 同步新版 DSH 的 profile patch：llm-pi-ai / agent-default-model / llm-deepseek */
+export function syncEnterpriseProfilePatches(base, models) {
+  for (const file of profilePatchFiles()) {
+    try {
+      const doc = readProfilePatchDoc(file)
+      if (!doc) continue // 不是 JSON 可管理的 patch：保持旧 settings.yaml 路径，避免破坏用户配置
+      const existingLlm = doc.rows.find((r) => r && r.id === 'llm-pi-ai' && !r.insert)
+      const existingDeepseek = doc.rows.find((r) => r && r.id === 'llm-deepseek' && !r.insert)
+      const rows = [
+        {
+          id: 'llm-pi-ai',
+          name: '@deepseek-ai/dsh-llm-pi-ai',
+          config: {
+            providers: {
+              ...(existingLlm?.config?.providers ?? {}),
+              'ent-gateway': {
+                displayName: '企业统一模型网关',
+                apiKeyEnv: 'ENT_GATEWAY_TOKEN_V2',
+                api: 'openai-completions',
+                baseURL: base + '/v1',
+                compat: { thinkingFormat: 'openai' },
+                reasoning: 'off',
+                models: models.map((m) => ({
+                  id: m.id,
+                  ...(m.name ? { name: m.name } : {}),
+                  contextWindow: m.contextWindow ?? 128000,
+                  maxTokens: m.maxTokens ?? 32768,
+                  input: (Array.isArray(m.input) && m.input.length ? m.input : ['text']).filter((x) => x === 'text' || x === 'image'),
+                  reasoningEfforts: m.reasoningEfforts,
+                })),
+              },
+              // 双协议并存：Responses API 通道（/v1/responses），默认仍走 completions
+              'ent-gateway-responses': {
+                displayName: '企业统一模型网关 Responses',
+                apiKeyEnv: 'ENT_GATEWAY_TOKEN_V2',
+                api: 'openai-responses',
+                baseURL: base + '/v1',
+                models: models.map((m) => ({
+                  id: m.id,
+                  ...(m.name ? { name: m.name } : {}),
+                  contextWindow: m.contextWindow ?? 128000,
+                  maxTokens: m.maxTokens ?? 32768,
+                  input: (Array.isArray(m.input) && m.input.length ? m.input : ['text']).filter((x) => x === 'text' || x === 'image'),
+                  reasoningEfforts: m.reasoningEfforts,
+                })),
+              },
+            },
+          },
+        },
+        {
+          id: 'llm-deepseek',
+          name: '@deepseek-ai/dsh-llm-deepseek',
+          config: { ...(existingDeepseek?.config ?? {}), models: [] },
+        },
+      ]
+      const hasDefault = doc.rows.some((r) => r && r.id === 'agent-default-model')
+      if (!hasDefault) {
+        rows.push({
+          id: 'agent-default-model',
+          name: '@deepseek-ai/dsh-agent-default-model',
+          config: { provider: 'ent-gateway', model: models[0].id },
+        })
+      }
+      const merged = mergePatchRows(doc.rows, rows)
+      if (JSON.stringify(merged) !== JSON.stringify(doc.rows)) {
+        writeProfilePatchDoc(file, doc.comments, merged)
+        ctxLoggerInfoSafe('[enterprise] 已同步新版 profile patch: ' + file)
+      }
+    } catch { /* 单个目标失败不影响其他 */ }
+  }
+}
+
+/** 登出时清理新版 profile patch 中的企业网关配置 */
+export function clearEnterpriseProfilePatches() {
+  for (const file of profilePatchFiles()) {
+    try {
+      const doc = readProfilePatchDoc(file)
+      if (!doc) continue
+      let rows = JSON.parse(JSON.stringify(doc.rows))
+      // llm-pi-ai：移除 ent-gateway；providers 为空对象保留骨架
+      const llm = rows.find((r) => r && r.id === 'llm-pi-ai' && !r.insert)
+      if (llm?.config?.providers) {
+        for (const name of ['ent-gateway', 'ent-gateway-responses']) {
+          if (Object.prototype.hasOwnProperty.call(llm.config.providers, name)) {
+            delete llm.config.providers[name]
+          }
+        }
+      }
+      // agent-default-model：仅当仍指向企业网关时清理
+      const adm = rows.find((r) => r && r.id === 'agent-default-model' && !r.insert)
+      if (adm?.config?.provider === 'ent-gateway') {
+        Reflect.deleteProperty(adm, 'config')
+        if (Object.keys(adm).filter((k) => k !== 'id' && k !== 'name').length === 0) {
+          rows = rows.filter((r) => r !== adm)
+        }
+      }
+      if (JSON.stringify(rows) !== JSON.stringify(doc.rows)) {
+        writeProfilePatchDoc(file, doc.comments, rows)
+        ctxLoggerInfoSafe('[enterprise] 已清理新版 profile patch: ' + file)
+      }
+    } catch { /* 单个目标失败不影响其他 */ }
+  }
+}
+
+
 export function syncOneMainSettingsProvider(mainSettings, base, models) {
   let raw = existsSync(mainSettings) ? readFileSync(mainSettings, 'utf8') : null
   if (raw === null) {
@@ -110,8 +289,9 @@ export function syncOneMainSettingsProvider(mainSettings, base, models) {
     writeTextAtomic(mainSettings, raw)
     ctxLoggerInfoSafe(`[enterprise] 独立 settings 文件不存在，已引导创建: ${mainSettings}`)
   }
-  // 已存在则先移除旧块
+  // 已存在则先移除旧块（双协议：completions + responses）
   raw = removeProviderFromSettingsYaml(raw, 'ent-gateway')
+  raw = removeProviderFromSettingsYaml(raw, 'ent-gateway-responses')
   const lines = raw.split('\n')
   // 找 llm-pi-ai: → providers: 的行号
   let llmIdx = -1
@@ -173,6 +353,7 @@ export function syncOneMainSettingsProvider(mainSettings, base, models) {
     }
     return lines
   }).flat()
+  // 双协议并存：completions（默认）+ responses（/v1/responses 通道），同模型同凭证
   const block = [
     '    ent-gateway:',
     '      displayName: 企业统一模型网关',
@@ -183,6 +364,13 @@ export function syncOneMainSettingsProvider(mainSettings, base, models) {
     '      compat:',
     '        thinkingFormat: openai',
     '      reasoning: off',
+    '      models:',
+    ...modelLines,
+    '    ent-gateway-responses:',
+    '      displayName: 企业统一模型网关 Responses',
+    '      apiKeyEnv: ' + GATEWAY_KEY_REF,
+    '      api: openai-responses',
+    '      baseURL: ' + base + '/v1',
     '      models:',
     ...modelLines,
   ]

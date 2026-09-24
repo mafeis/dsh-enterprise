@@ -10,7 +10,7 @@ import { writeTextAtomic, readJsonSafe } from '../shared/fs-utils.js'
 import { dshSettingsFile, entSettingsFile, credentialsFile } from '../shared/paths.js'
 import { pluginLog } from '../shared/log.js'
 import { saveState, readState } from '../state/state.js'
-import { removeProviderFromSettingsYaml } from '../settings/yaml-edit.js'
+import { removeProviderFromSettingsYaml, clearEnterpriseProfilePatches } from '../settings/yaml-edit.js'
 import { GATEWAY_KEY_REF } from '../settings/provider-config.js'
 
 /**
@@ -21,13 +21,14 @@ export function logoutLocal(reason = '用户登出') {
   // 1. enterprise-settings.yaml：移除 ent-gateway provider 与默认模型
   const settingsPath = entSettingsFile()
   const s = readJsonSafe(settingsPath)
-  if (s) { delete s.providers?.['ent-gateway']; delete s['agent-default-model']; writeTextAtomic(settingsPath, JSON.stringify(s, null, 2)) }
+  if (s) { delete s.providers?.['ent-gateway']; delete s.providers?.['ent-gateway-responses']; delete s['agent-default-model']; writeTextAtomic(settingsPath, JSON.stringify(s, null, 2)) }
   // 2. 主 settings.yaml：移除 ent-gateway；企业管控模式下进一步把模型配置整个清空（providers: {} + 删默认模型）——
   //    不登录不能用：登出后 DSH 无任何可用模型，登录遮罩挡住全部操作
   const mainSettings = dshSettingsFile()
   if (existsSync(mainSettings)) {
     const raw = readFileSync(mainSettings, 'utf8')
     let cleaned = removeProviderFromSettingsYaml(raw, 'ent-gateway')
+    cleaned = removeProviderFromSettingsYaml(cleaned, 'ent-gateway-responses')
     // 顶层 agent-default-model 若指向 ent-gateway，一并移除（否则 DSH 找不到 provider 启动报错）
     if (/^agent-default-model:\s*\n(\s+provider:\s*ent-gateway[^\n]*\n)/m.test(cleaned)) {
       cleaned = cleaned.replace(/^(agent-default-model:\s*)\n\s+provider:\s*ent-gateway[^\n]*\n\s+model:[^\n]*\n/m, '')
@@ -50,6 +51,9 @@ export function logoutLocal(reason = '用户登出') {
     }
     if (cleaned !== raw) writeTextAtomic(mainSettings, cleaned)
   }
+  // 2.5 新版 DSH（0.1.7+）profile patch：清理企业网关配置
+  clearEnterpriseProfilePatches()
+
   // 3. .credentials.yaml：移除网关凭证（新旧两个引用名都清）
   const credPath = credentialsFile()
   if (existsSync(credPath)) {

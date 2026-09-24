@@ -25,7 +25,7 @@ body[data-ds-dark-theme] #enterprise-overlay { background: rgba(0,0,0,.62); }
 #enterprise-overlay input { width: 100%; border: 1px solid var(--ent-line); border-radius: 9px; padding: 9px 13px; font-size: 14px; margin-bottom: 12px; font-family: inherit; outline: none; transition: border .15s; box-sizing: border-box; background: var(--ent-input-bg); color: var(--ent-fg); }
 #enterprise-overlay input::placeholder { color: var(--ent-fg-3); opacity: 1; }
 #enterprise-overlay input:focus { border-color: var(--ent-accent); }
-#enterprise-overlay button { width: 100%; padding: 10px; font-size: 14px; border: none; border-radius: 9px;
+#enterprise-overlay button { width: 100%; min-height: 44px; padding: 10px; font-size: 14px; border: none; border-radius: 9px;
   background: var(--ent-accent); color: var(--ent-accent-ink); cursor: pointer; font-family: inherit; }
 #enterprise-overlay button:disabled { opacity: .6; cursor: default; }
 #enterprise-overlay .err { color: var(--ent-bad); font-size: 12.5px; min-height: 20px; margin-bottom: 6px; }

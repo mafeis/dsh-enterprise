@@ -29,7 +29,7 @@
 
 			if (!status) return reactJsx.jsx(UI.skeleton, { lines: 4 });
 
-			return reactJsx.jsxs("div", { style: UI.page, children: [
+			return reactJsx.jsxs("div", { className: "enterprise-panel", style: UI.page, children: [
 				reactJsx.jsx("h3", { style: UI.h3First(), children: t("登录状态", "Login status") }),
 				reactJsx.jsxs("div", { style: UI.card, children: [
 					reactJsx.jsxs("div", { style: UI.row, children: [
@@ -70,7 +70,7 @@
 
 				reactJsx.jsx("h3", { style: UI.h3(), children: t("操作", "Actions") }),
 				reactJsx.jsxs("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", margin: "8px 0" }, children: [
-					reactJsx.jsx("button", { style: Object.assign({}, UI.btn, UI.btnPrimary), disabled: busy !== "", onClick: () => { setShowRelogin(!showRelogin); setMsg(""); }, children: t("重新登录", "Sign in again") }),
+					reactJsx.jsx("button", { "aria-expanded": showRelogin, style: Object.assign({}, UI.btn, UI.btnPrimary), disabled: busy !== "", onClick: () => { setShowRelogin(!showRelogin); setMsg(""); }, children: t("重新登录", "Sign in again") }),
 					reactJsx.jsx("button", { style: UI.btn, disabled: busy !== "", onClick: () => act("repair", () => apiPost("/api/enterprise/repair"), t("✓ 已按当前凭证重新配置 provider", "✓ Provider reconfigured")), children: busy === "repair" ? t("配置中…", "Configuring…") : t("一键配置 Provider", "One-click provider setup") }),
 					reactJsx.jsx("span", { style: { flex: 1 } }),
 					reactJsx.jsx("button", { style: UI.btnDangerText, disabled: busy !== "", title: t("清除企业网关配置与凭证，整个 DSH 将锁定直至重新登录", "Clears enterprise gateway config and credentials; DSH locks until you sign in again"), onClick: async () => {
