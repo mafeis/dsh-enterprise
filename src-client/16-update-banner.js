@@ -41,17 +41,39 @@
 <button id="enterprise-update-restart">${t2("立即重启", "Restart now")}</button>
 <button class="later" id="enterprise-update-later">${t2("稍后", "Later")}</button>`;
 			document.body.appendChild(el);
+			const manualHint = () => (/Mac|iPhone|iPad/.test(navigator.userAgent)
+				? t2("请手动重启：⌘Q 完全退出后重新打开", "Restart manually: press Cmd+Q, then reopen")
+				: t2("请手动重启：完全退出后重新打开", "Restart manually: quit the app, then reopen"));
+			const restartBtn = () => el.querySelector("#enterprise-update-restart");
 			el.querySelector("#enterprise-update-restart").addEventListener("click", async (e) => {
-				e.target.disabled = true;
-				e.target.textContent = t2("正在重启…", "Restarting…");
-				try {
-					const r = await fetch("/api/desktop/restart", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-					if (!r.ok) throw new Error(String(r.status));
-				} catch { /* 接口不可用时退化为提示手动重启 */ }
+				const b = e.target;
+				b.disabled = true;
+				b.textContent = t2("正在重启…", "Restarting…");
+				const post = async (path) => {
+					try {
+						const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+						return r.ok;
+					} catch { return false; }
+				};
+				// 顺序很重要：官方 DeepSeek Harness 上没有 /api/desktop/restart（老 DSH Desktop 时代的端点，
+				// 官方包全量 grep 无此路由），先打它就是 404 → 直接误判「重启未响应」。
+				// 我们自己的 /api/enterprise/restart-host 才是真后端（辅助进程负责「退出 → 重新打开」），
+				// 老桌面端保留兜底。
+				const ok = (await post("/api/enterprise/restart-host")) || (await post("/api/desktop/restart"));
+				if (!ok) {
+					b.disabled = false;
+					b.textContent = manualHint();
+					return;
+				}
+				// 已接单 ≠ 已重启：正常 8s 上下整个 App 退场重开（页面也随之消失）；
+				// 官方退出确认框最多占 20s，所以给到 30s：之后还活着就是没退成，
+				// 退回手动指引，别让人对着「正在重启…」干等。
 				setTimeout(() => {
-					const b = el.querySelector("#enterprise-update-restart");
-					if (b) { b.disabled = false; b.textContent = t2("重启未响应 · 请手动重启", "Not responding · restart manually"); }
-				}, 5000);
+					const x = restartBtn();
+					if (!x) return;
+					x.disabled = false;
+					x.textContent = manualHint();
+				}, 30000);
 			});
 			el.querySelector("#enterprise-update-later").addEventListener("click", () => el.remove());
 		}

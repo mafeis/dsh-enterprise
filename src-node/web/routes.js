@@ -16,6 +16,7 @@
  *   POST /api/enterprise/plugin-update     把已装插件更新到企业仓库的默认版本（不引入新插件）
  *   POST /api/enterprise/plugin-remove     卸载本机插件（保护名单/清单外拒绝）
  *   GET  /api/enterprise/plugin-registry   企业插件源配置
+ *   POST /api/enterprise/restart-host      重启宿主 App（官方 App 无重启端点，插件侧代打）
  *   GET  /api/enterprise/rules             本机执行规则（总量统计 + 命中记录）
  *   POST /api/enterprise/rules/check-url   试一试：网址是否被拦
  *   POST /api/enterprise/rules/check-text  试一试：文本是否命中敏感词
@@ -32,6 +33,7 @@ import { collectInstalledPlugins, collectDeviceInfo } from '../device/device-inf
 import { fetchPolicySnapshot, resolvePluginInstallSpec, runPluginCli, findProfileRoot, MARKET_DESC_ZH, MARKET_DESC_EN, marketMeta, peekCachedPolicy } from '../policy/policy.js'
 import { PROTECTED_PLUGINS, isEnforceBusy, claimManifestOp, releaseManifestOp } from '../enforce/plugin-enforce.js'
 import { installFromRepo, notePluginUpdateInstalled, pendingUpdates, compareSemver } from '../update/self-update.js'
+import { restartHost } from '../update/restart-host.js'
 import { readInstalledVersions } from '../update/installed-versions.js'
 import { RULE_ENGINE_VERSION, runTextRules, runUrlRules, noteRuleRun, getRuleRuns, getRuleHits, isStepHookAlive, ruleHost } from '../rules/engine.js'
 import { VERSION } from '../shared/version.js'
@@ -218,6 +220,23 @@ export function createRoutes(ctx) {
         } finally {
           releaseManifestOp()
         }
+      },
+    },
+    /* 重启宿主 App：官方 DeepSeek Harness 生产包里没有可用的重启端点/菜单项（依据见 update/restart-host.js），
+     *  老 DSH Desktop 时代的 /api/desktop/restart 在它身上必然 404 ——「立即重启」只能由插件代打。
+     *  命令行 Host（dsh web / dsh tui）不在 .app 内，返回明确的手工指引而不是硬来。 */
+    {
+      kind: 'exact',
+      path: '/api/enterprise/restart-host',
+      methods: ['POST'],
+      jsonBody: true,
+      handler: async ({ res }) => {
+        const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)) }
+        const r = await restartHost()
+        pluginLog(r.ok
+          ? `[enterprise] 重启宿主 App：已交给辅助进程（先退出，再重新打开 ${r.app ?? ''}）`
+          : `[enterprise] 重启宿主 App 不可用: ${r.error ?? '未知'}`)
+        return json(r.ok ? 200 : 409, r)
       },
     },
     {
