@@ -13,10 +13,17 @@ process.env.ENT_PROFILES_DIR = join(HOME, 'profiles')
 mkdirSync(join(HOME, 'enterprise'), { recursive: true })
 
 const PROFILE = join(HOME, 'profiles', 'desktop')
+const WEB_PROFILE = join(HOME, 'profiles', 'web')
 mkdirSync(PROFILE, { recursive: true })
+mkdirSync(WEB_PROFILE, { recursive: true })
 writeFileSync(join(PROFILE, 'package.json'), JSON.stringify({
   dsh: { profile: { bundles: ['dsh-enterprise', 'dsh-context', '@lemoncat7/dsh-knowledge'] } },
 }))
+writeFileSync(join(WEB_PROFILE, 'package.json'), JSON.stringify({
+  dsh: { profile: { bundles: ['dsh-enterprise'] } },
+}))
+// 记账按 profile 分档：本测试进程的「当前档位」固定为 desktop（activeProfileDir 认绝对路径）
+process.env.DSH_PROFILE = PROFILE
 const putPkg = (name, version) => {
   const dir = join(PROFILE, 'node_modules', ...name.split('/'))
   mkdirSync(dir, { recursive: true })
@@ -30,7 +37,8 @@ const writeState = (obj) => writeFileSync(stateFile, JSON.stringify(obj))
 writeState({ gateway: 'http://gw.test:8890/' })
 
 const { readInstalledVersions } = await import('../src-node/update/installed-versions.js')
-const { installFromRepo, notePluginUpdateInstalled, pendingUpdates, compareSemver } = await import('../src-node/update/self-update.js')
+const { installFromRepo, notePluginUpdateInstalled, pendingUpdates, pendingUpdateRestart, compareSemver, updateScope } = await import('../src-node/update/self-update.js')
+assert.equal(updateScope(), PROFILE, '作用域 = 当前 profile 根目录（去尾分隔符）')
 
 test('readInstalledVersions：scoped 包按段拼路径，没装的不收录', () => {
   const v = readInstalledVersions(['dsh-context', '@lemoncat7/dsh-knowledge', 'dsh-mnemon', ''])
@@ -83,14 +91,19 @@ test('installFromRepo：网关地址为空时不发请求', async () => {
   } finally { globalThis.fetch = orig; writeState({ gateway: 'http://gw.test:8890' }) }
 })
 
-test('pendingUpdates：只报本次进程启动之后装好的，本插件自身只出现一次', () => {
+test('pendingUpdates：只报本 profile 本次进程启动之后装好的，本插件自身只出现一次', () => {
   writeState({
     gateway: 'http://gw.test:8890',
-    selfUpdate: { installedVersion: '0.9.19', installedAt: new Date().toISOString() },
-    pluginUpdates: {
-      'dsh-context': { version: '0.60.0', at: new Date().toISOString() },
-      'dsh-mnemon': { version: '0.5.17', at: '2000-01-01T00:00:00.000Z' },   // 上个进程时代的记录
-      'dsh-enterprise': { version: '0.9.19', at: new Date().toISOString() },  // 与 selfUpdate 重复
+    selfUpdateByProfile: {
+      [PROFILE]: { installedVersion: '0.9.19', installedAt: new Date().toISOString() },
+      [WEB_PROFILE]: { installedVersion: '0.9.19', installedAt: new Date().toISOString() },
+    },
+    pluginUpdatesByProfile: {
+      [PROFILE]: {
+        'dsh-context': { version: '0.60.0', at: new Date().toISOString() },
+        'dsh-mnemon': { version: '0.5.17', at: '2000-01-01T00:00:00.000Z' },   // 上个进程时代的记录
+        'dsh-enterprise': { version: '0.9.19', at: new Date().toISOString() },  // 与 selfUpdate 重复
+      },
     },
   })
   const list = pendingUpdates()
@@ -100,12 +113,31 @@ test('pendingUpdates：只报本次进程启动之后装好的，本插件自身
   ])
 })
 
-test('notePluginUpdateInstalled：按包名累计，不覆盖别人的记录', () => {
-  writeState({ gateway: 'http://gw.test:8890', pluginUpdates: { 'dsh-context': { version: '0.60.0', at: 'x' } } })
+test('多实例隔离：账记在别的 profile 上时，本 profile 不能弹「已更新，重启后生效」（0.9.19 事故）', () => {
+  // 先跑心跳的 web 实例把包装进自己档位并写了全局账 → desktop 档位其实还是旧版
+  writeState({
+    gateway: 'http://gw.test:8890',
+    selfUpdate: { attemptedVersion: '0.9.19', attemptedAt: new Date().toISOString(), installedVersion: '0.9.19', installedAt: new Date().toISOString() },
+    selfUpdateByProfile: { [WEB_PROFILE]: { installedVersion: '0.9.19', installedAt: new Date().toISOString() } },
+    pluginUpdatesByProfile: { [WEB_PROFILE]: { 'dsh-context': { version: '0.60.0', at: new Date().toISOString() } } },
+  })
+  assert.deepEqual(pendingUpdates(), [], '别的档位的更新不该显示在本档位')
+  assert.equal(pendingUpdateRestart(), null, '更不能谎报「本档位已更新到 x，重启后生效」')
+})
+
+test('notePluginUpdateInstalled：按 profile + 包名累计，不覆盖别人（含别的档位）的记录', () => {
+  writeState({
+    gateway: 'http://gw.test:8890',
+    pluginUpdatesByProfile: {
+      [PROFILE]: { 'dsh-context': { version: '0.60.0', at: 'x' } },
+      [WEB_PROFILE]: { 'dsh-mnemon': { version: '0.5.17', at: 'x' } },
+    },
+  })
   notePluginUpdateInstalled('@xmanrui/dsh-im', '4.30.0')
   const s = JSON.parse(readFileSync(stateFile, 'utf8'))
-  assert.ok(s.pluginUpdates['dsh-context'], '原有记录要在')
-  assert.equal(s.pluginUpdates['@xmanrui/dsh-im'].version, '4.30.0')
+  assert.ok(s.pluginUpdatesByProfile[PROFILE]['dsh-context'], '本档位原有记录要在')
+  assert.equal(s.pluginUpdatesByProfile[PROFILE]['@xmanrui/dsh-im'].version, '4.30.0')
+  assert.equal(s.pluginUpdatesByProfile[WEB_PROFILE]['dsh-mnemon'].version, '0.5.17', '别的档位不受影响')
 })
 
 test('compareSemver：仓库版本相等时不能出现更新按钮（预发布号也按低版本算）', () => {

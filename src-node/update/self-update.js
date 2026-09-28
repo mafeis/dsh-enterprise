@@ -20,10 +20,46 @@ import { readState, saveState } from '../state/state.js'
 import { pluginLog } from '../shared/log.js'
 import { VERSION } from '../shared/version.js'
 
-/** 插件更新状态键（enterprise-state.json） */
+/** 插件更新状态键（enterprise-state.json）。
+ *  ByProfile 是新键：更新记账必须按 profile 分，理由见 updateScope()。
+ *  不带 ByProfile 的是 0.9.19 及更早的全局单条记录，只读兼容（见 legacySelfUpdate）。 */
 const STATE_KEY = 'selfUpdate'
+const PROFILE_STATE_KEY = 'selfUpdateByProfile'
 /** 同版本尝试冷却：6 小时 */
 const COOLDOWN_MS = 6 * 60 * 60 * 1000
+
+/** 更新记账的作用域 = 当前 profile 根目录。
+ *
+ *  多个实例（官方 App 的 profiles/desktop + dsh web/TUI 的别的 profile）共用同一个
+ *  DSH_HOME 状态文件，但 installFromRepo 装的是**各自** profile。0.9.19 之前记的是一笔
+ *  全局账，实测后果（日志坐实）：先跑心跳的实例把包装进自己 profile 并写全局
+ *  attemptedVersion，其它实例从此 'cooldown' 静默跳过、永远没装上（官方 App 停在
+ *  0.9.18 而 web 实例 0.9.16 就是这次事故）；更糟的是没装上档的实例照抄全局
+ *  installedVersion，弹出「已更新到 x，重启后生效」的假提示。 */
+export function updateScope() {
+  const root = String(findProfileRoot() ?? '').replace(/[\\/]+$/, '')
+  return root || 'default'
+}
+
+/** 本 profile 的自更新记录（没有则 null；不回落到别人的账） */
+function ownSelfUpdate() {
+  const rec = readState()?.[PROFILE_STATE_KEY]
+  const mine = rec && typeof rec === 'object' ? rec[updateScope()] : null
+  return mine && typeof mine === 'object' ? mine : null
+}
+
+/** 老的全局单条记录：只用来继承「冷却」，避免升级瞬间多个实例同时重装；
+ *  绝不拿它当本 profile 的安装凭据（那正是假提示的来源）。 */
+function legacySelfUpdate() {
+  const rec = readState()?.[STATE_KEY]
+  return rec && typeof rec === 'object' && (rec.attemptedVersion || rec.installedVersion) ? rec : null
+}
+
+function saveSelfUpdate(patch) {
+  const all = readState()?.[PROFILE_STATE_KEY]
+  const base = all && typeof all === 'object' ? all : {}
+  saveState({ [PROFILE_STATE_KEY]: { ...base, [updateScope()]: { ...(base[updateScope()] ?? {}), ...patch } } })
+}
 
 /** 模块级互斥：一次只跑一个安装流程 */
 let updating = false
@@ -69,33 +105,42 @@ export async function installFromRepo(name, version) {
   return { ok: true, tgz, version: ver }
 }
 
-/** 其它插件「已装待重启」记录（本插件自身用 selfUpdate 键，两份在 pendingUpdates 里汇总给 UI） */
-const UPDATES_KEY = 'pluginUpdates'
+/** 其它插件「已装待重启」记录（本插件自身用 selfUpdate 键，两份在 pendingUpdates 里汇总给 UI）。
+ *  同样按 profile 分：A 档更新了插件，B 档不能跟着弹「重启后生效」。 */
+const UPDATES_KEY = 'pluginUpdatesByProfile'
 
 export function notePluginUpdateInstalled(name, version) {
-  const cur = readState()?.[UPDATES_KEY] ?? {}
-  saveState({ [UPDATES_KEY]: { ...cur, [name]: { version, at: new Date().toISOString() } } })
+  const all = readState()?.[UPDATES_KEY]
+  const base = all && typeof all === 'object' ? all : {}
+  const mine = base[updateScope()] && typeof base[updateScope()] === 'object' ? base[updateScope()] : {}
+  saveState({ [UPDATES_KEY]: { ...base, [updateScope()]: { ...mine, [name]: { version, at: new Date().toISOString() } } } })
+}
+
+/** 本 profile 的其它插件更新记录 */
+function ownPluginUpdates() {
+  const all = readState()?.[UPDATES_KEY]
+  const mine = all && typeof all === 'object' ? all[updateScope()] : null
+  return mine && typeof mine === 'object' ? mine : {}
 }
 
 /** 本次进程启动之后完成的插件更新（含本插件自身）：UI 据此提示「重启后生效」 */
 export function pendingUpdates() {
   const since = Date.now() - process.uptime() * 1000
   const out = []
-  const own = readState()?.[STATE_KEY]
+  const own = ownSelfUpdate()
   if (own?.installedVersion && new Date(own.installedAt).getTime() > since) {
     out.push({ name: 'dsh-enterprise', version: own.installedVersion })
   }
-  const others = readState()?.[UPDATES_KEY] ?? {}
-  for (const [n, rec] of Object.entries(others)) {
+  for (const [n, rec] of Object.entries(ownPluginUpdates())) {
     if (n === 'dsh-enterprise' || !rec?.version) continue
     if (new Date(rec.at).getTime() > since) out.push({ name: n, version: rec.version })
   }
   return out
 }
 
-/** 当前待生效的更新（UI 提示用）：仅本次进程启动之后安装成功的才算「待重启」 */
+/** 当前待生效的更新（UI 提示用）：仅**本 profile** 本次进程启动之后安装成功的才算「待重启」 */
 export function pendingUpdateRestart() {
-  const rec = readState()?.[STATE_KEY]
+  const rec = ownSelfUpdate()
   if (!rec?.installedVersion || !rec?.installedAt) return null
   if (new Date(rec.installedAt) <= new Date(Date.now() - process.uptime() * 1000)) return null
   return { version: rec.installedVersion, at: rec.installedAt }
@@ -106,15 +151,19 @@ export async function maybeSelfUpdate(latestVersion, trigger = 'heartbeat') {
   const latest = String(latestVersion ?? '').trim()
   if (!latest || updating) return { ok: false, skipped: 'busy-or-empty' }
   if (compareSemver(latest, VERSION) <= 0) return { ok: true, skipped: 'up-to-date' }
-  // 冷却：同版本短时间内不反复拉（安装失败也冷却，避免每拍心跳都打一轮）
-  const prev = readState()?.[STATE_KEY]
-  if (prev?.attemptedVersion === latest && prev?.attemptedAt
-      && Date.now() - new Date(prev.attemptedAt).getTime() < COOLDOWN_MS) {
+  // 冷却：同版本短时间内不反复拉（安装失败也冷却，避免每拍心跳都打一轮）。
+  // 只看本 profile 的账 + 老全局记录（升级那一下的多实例防抖），别档的冷却不算我的冷却。
+  const prev = ownSelfUpdate()
+  const legacy = legacySelfUpdate()
+  const cooled = (rec) => !!rec && rec.attemptedVersion === latest && rec.attemptedAt
+    && Date.now() - new Date(rec.attemptedAt).getTime() < COOLDOWN_MS
+  if (cooled(prev) || cooled(legacy)) {
+    pluginLog(`[enterprise] 自动更新跳过：${latest} 冷却中（profile=${updateScope()}，${VERSION} → ${latest} 留待下轮或重启后）`)
     return { ok: false, skipped: 'cooldown' }
   }
   updating = true
   try {
-    saveState({ [STATE_KEY]: { ...prev, attemptedVersion: latest, attemptedAt: new Date().toISOString() } })
+    saveSelfUpdate({ attemptedVersion: latest, attemptedAt: new Date().toISOString() })
     // ① 下载仓库 tgz（默认版本 = 最新；路径与 /plugin-packages 下载端点一致）
     // ①② 下载 + 安装走通用通道（与「更新」按钮同一份实现，不再各写一遍）
     const r = await installFromRepo('dsh-enterprise', latest)
@@ -122,9 +171,10 @@ export async function maybeSelfUpdate(latestVersion, trigger = 'heartbeat') {
       pluginLog(`[enterprise] 自动更新 ${VERSION} → ${latest} 安装失败: ${r.error ?? '未知'}`)
       return { ok: false, error: r.error ?? 'pnpm 安装失败' }
     }
-    // ③ 记录待重启（UI 轮询 /status 弹提示）；运行中实例继续跑旧代码，重启后加载新版本
-    saveState({ [STATE_KEY]: { ...(readState()?.[STATE_KEY] ?? {}), installedVersion: latest, installedAt: new Date().toISOString() } })
-    pluginLog(`[enterprise] 自动更新完成：${VERSION} → ${latest}（重启 DSH 后生效）`)
+    // ③ 记录待重启（UI 轮询 /status 弹提示）；运行中实例继续跑旧代码，重启后加载新版本。
+    //     只记本 profile —— 包只进了这一个档，别的档既不该看到「已更新」也不该被这条冷却挡住。
+    saveSelfUpdate({ installedVersion: latest, installedAt: new Date().toISOString() })
+    pluginLog(`[enterprise] 自动更新完成：${VERSION} → ${latest}（profile=${updateScope()}，重启 DSH 后生效）`)
     return { ok: true, version: latest }
   } catch (e) {
     const msg = String(e?.message ?? e).slice(0, 200)
