@@ -6,6 +6,7 @@
 		/** 一条提示覆盖三种情形：只更新了企业插件 / 更新了某个第三方插件 / 一次更新了好几个 */
 		function bannerText(list) {
 			const esc2 = (x) => String(x || "").replace(/</g, "&lt;");
+			if (!list.length) return "";   // 空清单不拼话：否则会渲染出一句「已更新到 <空>」
 			if (list.length > 1) {
 				const names = list.map((x) => esc2(x.name)).slice(0, 3).join("、");
 				const more = list.length > 3 ? "…" : "";
