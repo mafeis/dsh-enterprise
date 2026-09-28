@@ -13,6 +13,7 @@
  *   GET  /api/enterprise/usage?days=       我的消耗（透传网关计费）
  *   GET  /api/enterprise/market            企业插件市场
  *   POST /api/enterprise/plugin-install    安装企业允许清单内的插件（事前拦截）
+ *   POST /api/enterprise/plugin-update     把已装插件更新到企业仓库的默认版本（不引入新插件）
  *   POST /api/enterprise/plugin-remove     卸载本机插件（保护名单/清单外拒绝）
  *   GET  /api/enterprise/plugin-registry   企业插件源配置
  *   GET  /api/enterprise/rules             本机执行规则（总量统计 + 命中记录）
@@ -30,6 +31,8 @@ import { readState, saveState, readToken, readFactoryGateway } from '../state/st
 import { collectInstalledPlugins, collectDeviceInfo } from '../device/device-info.js'
 import { fetchPolicySnapshot, resolvePluginInstallSpec, runPluginCli, findProfileRoot, MARKET_DESC_ZH, MARKET_DESC_EN, marketMeta, peekCachedPolicy } from '../policy/policy.js'
 import { PROTECTED_PLUGINS, isEnforceBusy, claimManifestOp, releaseManifestOp } from '../enforce/plugin-enforce.js'
+import { installFromRepo, notePluginUpdateInstalled, pendingUpdates, compareSemver } from '../update/self-update.js'
+import { readInstalledVersions } from '../update/installed-versions.js'
 import { RULE_ENGINE_VERSION, runTextRules, runUrlRules, noteRuleRun, getRuleRuns, getRuleHits, isStepHookAlive, ruleHost } from '../rules/engine.js'
 import { VERSION } from '../shared/version.js'
 import { currentHeartbeatState, runHeartbeatOnce, syncHeartbeatTimer } from '../heartbeat/heartbeat.js'
@@ -73,12 +76,25 @@ export function createRoutes(ctx) {
         // 描述优先级（zh/en 成对）：策略下发的插件仓库描述（管理员在网关维护双语）→ 内置名录 → npm 兜底
         const meta = policy?.pluginMeta ?? {}
         const npmDesc = await marketMeta(allowed.filter((n) => !(meta[n]?.description) && !MARKET_DESC_ZH[n] && !MARKET_DESC_EN[n]))
+        // 已装版本 + 仓库默认版本：两者相除才得出「可更新」。版本表来自心跳落盘的
+        // repoPluginLatest（网关 pluginLatest），心跳没跑过时为空 → 不显示更新按钮，
+        // 宁可不提示也不拿空表当「已是最新」。
+        const versions = readInstalledVersions(allowed) ?? {}
+        const repoLatest = readState().repoPluginLatest ?? {}
         const items = allowed.map((name) => {
           const zh = meta[name]?.descriptionZh || meta[name]?.description || MARKET_DESC_ZH[name] || ''
           const en = meta[name]?.descriptionEn || MARKET_DESC_EN[name] || (zh ? '' : (npmDesc[name] ?? ''))
+          const isInstalled = installed.includes(name)
+          const installedVersion = versions[name] ?? ''
+          const repoVersion = repoLatest[name] ?? ''
           return {
             name,
-            installed: installed.includes(name),
+            installed: isInstalled,
+            installedVersion,
+            repoVersion,
+            // 只允许把「已装的」更新到仓库版本：没装的走安装按钮，更新按钮不引入新插件
+            updateAvailable: Boolean(isInstalled && repoVersion && installedVersion
+              && compareSemver(repoVersion, installedVersion) > 0),
             descriptionZh: zh,
             descriptionEn: en,
             description: zh,   // 兼容旧客户端：description 仍为中文
@@ -149,6 +165,56 @@ export function createRoutes(ctx) {
             }
           }
           return json(200, { ...r, ok: verified, verified, resolvedSpec: spec.spec, source: spec.source, registry: spec.registry ?? null })
+        } finally {
+          releaseManifestOp()
+        }
+      },
+    },
+    /** 更新已装插件到企业仓库的默认版本。
+     *  和 plugin-install 的边界：这里**只更新已装的**，不引入任何新插件——企业侧禁止终端
+     *  自助安装，但仓库里该装哪一版是管理员定的，所以「管理员发的新版」可以用户点一下装上。
+     *  四道闸：在允许清单内 → 本机已装 → 仓库确实有更高版本 → 与管控清理互斥。 */
+    {
+      kind: 'exact',
+      path: '/api/enterprise/plugin-update',
+      methods: ['POST'],
+      jsonBody: true,
+      handler: async ({ res, body }) => {
+        const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)) }
+        const policy = await fetchPolicySnapshot()
+        const allowed = Array.isArray(policy?.allowedPlugins) ? policy.allowedPlugins : null
+        const name = String(body?.name ?? '').trim()
+        if (!name) return json(400, { ok: false, error: '需要 name（插件包名）' })
+        if (allowed && allowed.length && !allowed.includes(name)) {
+          return json(403, { ok: false, error: `插件「${name}」不在企业允许清单内，已拦截` })
+        }
+        const installed = collectInstalledPlugins() ?? []
+        if (!installed.includes(name)) return json(400, { ok: false, error: `「${name}」未在本机安装，不能用「更新」（要安装请用安装入口）` })
+        const repoVersion = String((readState().repoPluginLatest ?? {})[name] ?? '').trim()
+        if (!repoVersion) return json(400, { ok: false, error: `企业仓库里没有「${name}」的版本信息（等一次心跳或联系管理员把它入库）` })
+        const from = readInstalledVersions([name])?.[name] ?? ''
+        if (from && compareSemver(repoVersion, from) <= 0) {
+          return json(200, { ok: true, updated: false, from, to: repoVersion, note: '已是仓库最新版本' })
+        }
+        if (isEnforceBusy() || !claimManifestOp()) {
+          return json(409, { ok: false, error: '插件管控清理正在进行，请稍后重试更新' })
+        }
+        try {
+          const r = await installFromRepo(name, repoVersion)
+          noteRuleRun('plugin-update', r.ok)
+          if (!r.ok) {
+            pluginLog(`[enterprise] plugin-update ${name} ${from} → ${repoVersion} 失败: ${String(r.error ?? '').slice(0, 300)}`)
+            return json(200, { ok: false, updated: false, from, to: repoVersion, error: r.error ?? '更新失败' })
+          }
+          // 装完核实实体真的落盘（与安装同口径：dsh CLI 偶发「部分成功」，bundle 写了但包没落盘）
+          const profileDir = findProfileRoot()
+          const entity = profileDir ? join(profileDir, 'node_modules', ...name.split('/'), 'package.json') : null
+          if (entity && !existsSync(entity)) {
+            return json(200, { ok: false, updated: false, from, to: repoVersion, error: `更新未完成（${name} 的依赖未落盘，通常是网络抖动），请重试` })
+          }
+          notePluginUpdateInstalled(name, repoVersion)
+          pluginLog(`[enterprise] 插件更新完成：${name} ${from || '?'} → ${repoVersion}（重启 DSH 后生效）`)
+          return json(200, { ok: true, updated: true, from, to: repoVersion, restartRequired: true, name })
         } finally {
           releaseManifestOp()
         }
@@ -342,6 +408,8 @@ export function createRoutes(ctx) {
               ? state.lastPluginCleanup : null,
             // 自动更新待重启：本次进程启动后装好了新版本 → UI 提示重启生效
             updatePending: pendingUpdateRestart(),
+            // 本次进程启动后更新过的所有插件（含本插件自身 + 面板「更新」按钮装的其它插件）
+            updatesPending: pendingUpdates(),
           },
         })
       },

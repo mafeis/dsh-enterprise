@@ -15,6 +15,10 @@
 			"market.uninstall": { zh: "卸载", en: "Uninstall" },
 			"market.uninstalling": { zh: "卸载中…", en: "Uninstalling…" },
 			"market.uninstallOk": { zh: "已卸载 · 重启 DSH 后完全退出", en: "Uninstalled · restart DSH to fully unload" },
+			"market.updateTo": { zh: "更新到 {v}", en: "Update to {v}" },
+			"market.updating": { zh: "更新中…", en: "Updating…" },
+			"market.updateOk": { zh: "已更新到 {v} · 重启 DSH 后生效", en: "Updated to {v} · restart DSH to take effect" },
+			"market.updateLatest": { zh: "已是企业仓库最新版本", en: "Already on the enterprise repo version" },
 			"market.noDesc": { zh: "（无描述）", en: "(no description)" },
 			"market.localInstalled": { zh: "本机已安装", en: "Installed on this machine" },
 			"market.noneInstalled": { zh: "无", en: "None" },
@@ -42,6 +46,7 @@
 			const [installMsg, setInstallMsg] = react.useState("");
 			const [installing, setInstalling] = react.useState("");
 			const [uninstalling, setUninstalling] = react.useState("");
+			const [updating, setUpdating] = react.useState("");
 			const [expanded, setExpanded] = react.useState(() => new Set());
 			react.useEffect(() => {
 				let alive = true;
@@ -77,6 +82,24 @@
 				setInstalling("");
 			};
 
+			/** 更新到企业仓库的默认版本：只动本机已装的插件，服务端还会再查一遍允许清单 */
+			const doUpdate = async (name) => {
+				setUpdating(name); setInstallMsg("");
+				try {
+					const res = await apiPost("/api/enterprise/plugin-update", { name });
+					if (res.ok && res.updated) {
+						const hot = name !== "dsh-enterprise" && g.installedPlugins?.includes("dsh-hot-reload");
+						setInstallMsg("✓ " + name + "：" + (hot ? t("market.okUpgrade") : t("market.updateTo", { v: res.to }) + " · " + t("market.okRestart").split("（")[0]));
+						statusStoreRefresh();
+						refreshMarket();
+					} else if (res.ok) {
+						setInstallMsg("✓ " + name + "：" + t("market.updateLatest"));
+						refreshMarket();
+					} else setInstallMsg("✗ " + name + "：" + (res.error || "update failed"));
+				} catch (e) { setInstallMsg("✗ " + name + "：" + (e && e.message ? e.message : e)); }
+				setUpdating("");
+			};
+
 			const doUninstall = async (name) => {
 				setUninstalling(name); setInstallMsg("");
 				try {
@@ -94,6 +117,7 @@
 			// 允许清单为空 = 不限装 → 保留手输安装入口
 			const unrestricted = Array.isArray(items) && market.ok === true && items.length === 0 && !g.allowedUnknown;
 			const installedCount = (items || []).filter((x) => x.installed).length;
+			const updatableCount = (items || []).filter((x) => x.updateAvailable).length;
 			const toggleExpand = (name) => setExpanded((prev) => {
 				const next = new Set(prev);
 				next.has(name) ? next.delete(name) : next.add(name);
@@ -105,7 +129,9 @@
 				reactJsx.jsx("p", { style: Object.assign({}, UI.dim, { margin: "0 0 10px" }), children: t("market.subtitle") }),
 				!items ? null : reactJsx.jsxs("div", { style: { display: "flex", gap: 6, marginBottom: 10 }, children: [
 					UI.infoBadge(t("market.canInstall") + " · " + items.length),
-					UI.okBadge(t("market.installed") + " · " + installedCount)
+					UI.okBadge(t("market.installed") + " · " + installedCount),
+					// 仓库里有新版的已装插件数：点各卡片上的「更新到 v…」即可，来源只有企业仓库
+					updatableCount ? UI.badge((loc === "zh" ? "可更新 · " : "Updatable · ") + updatableCount, "var(--ent-warn-soft)", "var(--ent-warn)") : null
 				] }),
 				violations.length > 0 && g.enforceMode !== "off"
 					? UI.alertBar(t(g.enforceMode === "warn" ? "market.violationsWarn" : "market.violations", { n: violations.length, list: violations.join("、") }))
@@ -123,7 +149,7 @@
 								return reactJsx.jsxs("div", { style: Object.assign({}, UI.card, { margin: 0, display: "flex", flexDirection: "column", gap: 6 }), children: [
 									reactJsx.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
 										reactJsx.jsx("b", { style: { fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, title: it.name, children: it.name }),
-										it.installed ? UI.okBadge(t("market.installed")) : null
+										it.installed ? UI.okBadge(t("market.installed") + (it.installedVersion ? " v" + it.installedVersion : "")) : null
 									] }),
 									(() => {
 										const body = desc || t("market.noDesc");
@@ -137,8 +163,11 @@
 									open ? reactJsx.jsx("div", { style: UI.hint, children: t("market.fullName") + "：" + it.name }) : null,
 									reactJsx.jsx("div", { style: { display: "flex", gap: 8, marginTop: 2 }, children: [
 										desc ? reactJsx.jsx("button", { style: Object.assign({}, UI.btn, { flex: 1, fontSize: 12.5 }), onClick: () => toggleExpand(it.name), children: open ? t("market.less") : t("market.detail") }) : null,
+										it.installed && it.updateAvailable
+											? reactJsx.jsx("button", { style: Object.assign({}, UI.btn, UI.btnPrimary, { flex: 1 }), disabled: updating !== "" || installing !== "" || uninstalling !== "", title: (it.installedVersion ? "v" + it.installedVersion : "?") + " → v" + it.repoVersion, onClick: () => doUpdate(it.name), children: updating === it.name ? t("market.updating") : t("market.updateTo", { v: it.repoVersion }) })
+											: null,
 										it.installed
-											? reactJsx.jsx("button", { style: Object.assign({}, UI.btn, { flex: desc ? 1 : "100%" }), disabled: uninstalling !== "" || installing !== "", onClick: async () => {
+											? reactJsx.jsx("button", { style: Object.assign({}, UI.btn, { flex: it.updateAvailable ? "0 0 auto" : (desc ? 1 : "100%") }), disabled: uninstalling !== "" || installing !== "" || updating !== "", onClick: async () => {
 												const ok = await mountConfirmDialog({ title: t("market.confirmUninstallTitle", { name: it.name }), message: t("market.confirmUninstallMsg"), confirmText: t("market.uninstall") });
 												if (ok) doUninstall(it.name);
 											}, children: uninstalling === it.name ? t("market.uninstalling") : t("market.uninstall") })

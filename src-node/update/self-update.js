@@ -6,6 +6,11 @@
  *    （与插件市场自助安装同一条 runPluginCli 通道，manifest 写权互斥防并发）
  *  - 生效：装完仅记录状态，当前会话仍跑旧代码；UI 提示重启，重启后加载新版本
  *  - 防抖：同版本 6 小时内只试一次；安装中互斥；绝不降级
+ *
+ * 仓库里其它插件（dsh-context / dsh-mnemon / @scope/… 等）不自动装：企业侧「不允许终端自助
+ * 安装」，但仓库里该装哪一版是管理员定的，所以对**本机已装且在允许清单内**的插件开放
+ * 「更新」按钮（routes.js → /api/enterprise/plugin-update），下载与安装共用本文件的
+ * installFromRepo —— 一条通道，缓存路径、错误口径、宿主 CLI 调用完全一致。
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -39,6 +44,55 @@ export function compareSemver(a, b) {
   return 0
 }
 
+/** 企业仓库 → profile 缓存 → 宿主插件 CLI 安装（自更新与「更新」按钮共用同一条通道）。
+ *  URL 里包名要逐段 encodeURIComponent：@scope/name 的 '@' 需转义，且必须分成两段拼，
+ *  否则网关 /plugin-packages/ 会把 scope 当成包名（坑见网关 repo-store 的 parsePackagePath）。 */
+export async function installFromRepo(name, version) {
+  const pkg = String(name ?? '').trim()
+  const ver = String(version ?? '').trim()
+  if (!pkg || !ver) return { ok: false, error: '缺少包名或版本号' }
+  const profileDir = findProfileRoot()
+  if (!profileDir) return { ok: false, error: '无法定位 profile 目录' }
+  const base = (readState().gateway ?? '').replace(/\/+$/, '')
+  if (!base) return { ok: false, error: '网关地址为空' }
+  const cacheDir = join(profileDir, '.ent-plugin-cache')
+  await mkdir(cacheDir, { recursive: true })
+  const tgz = join(cacheDir, `${pkg.replace('/', '-')}-${ver}.tgz`)   // 固定名：同包重装即覆盖，deps 引用恒定
+  const url = `${base}/plugin-packages/${pkg.split('/').map(encodeURIComponent).join('/')}/${encodeURIComponent(ver)}`
+  const res = await fetch(url, { signal: AbortSignal.timeout(60000) })
+  if (!res.ok) return { ok: false, error: `企业仓库下载失败 HTTP ${res.status}（${pkg}@${ver}）` }
+  const buf = Buffer.from(await res.arrayBuffer())
+  if (buf.length < 1024) return { ok: false, error: `仓库包异常（${buf.length}B）` }
+  await writeFile(tgz, buf)
+  const r = await runPluginCli(['add', `file:${tgz}`])
+  if (!r.ok) return { ok: false, error: r.error ?? '宿主插件安装失败', tgz }
+  return { ok: true, tgz, version: ver }
+}
+
+/** 其它插件「已装待重启」记录（本插件自身用 selfUpdate 键，两份在 pendingUpdates 里汇总给 UI） */
+const UPDATES_KEY = 'pluginUpdates'
+
+export function notePluginUpdateInstalled(name, version) {
+  const cur = readState()?.[UPDATES_KEY] ?? {}
+  saveState({ [UPDATES_KEY]: { ...cur, [name]: { version, at: new Date().toISOString() } } })
+}
+
+/** 本次进程启动之后完成的插件更新（含本插件自身）：UI 据此提示「重启后生效」 */
+export function pendingUpdates() {
+  const since = Date.now() - process.uptime() * 1000
+  const out = []
+  const own = readState()?.[STATE_KEY]
+  if (own?.installedVersion && new Date(own.installedAt).getTime() > since) {
+    out.push({ name: 'dsh-enterprise', version: own.installedVersion })
+  }
+  const others = readState()?.[UPDATES_KEY] ?? {}
+  for (const [n, rec] of Object.entries(others)) {
+    if (n === 'dsh-enterprise' || !rec?.version) continue
+    if (new Date(rec.at).getTime() > since) out.push({ name: n, version: rec.version })
+  }
+  return out
+}
+
 /** 当前待生效的更新（UI 提示用）：仅本次进程启动之后安装成功的才算「待重启」 */
 export function pendingUpdateRestart() {
   const rec = readState()?.[STATE_KEY]
@@ -62,20 +116,8 @@ export async function maybeSelfUpdate(latestVersion, trigger = 'heartbeat') {
   try {
     saveState({ [STATE_KEY]: { ...prev, attemptedVersion: latest, attemptedAt: new Date().toISOString() } })
     // ① 下载仓库 tgz（默认版本 = 最新；路径与 /plugin-packages 下载端点一致）
-    const profileDir = findProfileRoot()
-    if (!profileDir) return { ok: false, error: '无法定位 profile 目录' }
-    const base = (readState().gateway ?? '').replace(/\/$/, '')
-    if (!base) return { ok: false, error: '网关地址为空' }
-    const cacheDir = join(profileDir, '.ent-plugin-cache')
-    await mkdir(cacheDir, { recursive: true })
-    const tgz = join(cacheDir, `dsh-enterprise-${latest}.tgz`)
-    const res = await fetch(`${base}/plugin-packages/dsh-enterprise/${encodeURIComponent(latest)}`, { signal: AbortSignal.timeout(60000) })
-    if (!res.ok) return { ok: false, error: `仓库下载失败 HTTP ${res.status}` }
-    const buf = Buffer.from(await res.arrayBuffer())
-    if (buf.length < 1024) return { ok: false, error: `仓库包异常（${buf.length}B）` }
-    await writeFile(tgz, buf)
-    // ② 与插件市场同一条安装通道（desktop-cli → pnpm；manifest 写权互斥）
-    const r = await runPluginCli(['add', `file:${tgz}`])
+    // ①② 下载 + 安装走通用通道（与「更新」按钮同一份实现，不再各写一遍）
+    const r = await installFromRepo('dsh-enterprise', latest)
     if (!r.ok) {
       pluginLog(`[enterprise] 自动更新 ${VERSION} → ${latest} 安装失败: ${r.error ?? '未知'}`)
       return { ok: false, error: r.error ?? 'pnpm 安装失败' }

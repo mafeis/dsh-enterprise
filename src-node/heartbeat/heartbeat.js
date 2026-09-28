@@ -26,6 +26,8 @@ let lastModelFingerprint = null
 let hbFailStreak = 0
 /** 连续 401 计数（凭证被网关拒绝：停用账号/吊销令牌）——连续 2 次自动清场回登录页 */
 let hb401Streak = 0
+/** 上一次落盘的仓库版本表 JSON：用来判断 pluginLatest 是否真的变了 */
+let lastRepoLatestJson = null
 
 /** 当前生效的心跳配置指纹（JSON 字符串）：与状态文件不一致即热重载定时器 */
 const HB_DEFAULT = { enabled: true, intervalSec: 60 }
@@ -270,8 +272,19 @@ export async function runHeartbeatOnce() {
         // retryPendingPluginEntities 是同步函数（队列空时返回 undefined），不能挂 .catch——用 try/catch 兜底
         try { retryPendingPluginEntities() } catch { /* 残留实体重试失败不影响心跳 */ }
       }
+      // 仓库版本表落地：网关心跳把插件仓库各插件的默认版本整张带下来（pluginLatest），
+      // 存进状态文件给「插件」页算「有新版可更新」用——省一次网关往返，也让面板离线可读。
+      // 只在真的变了才写盘（60s 一拍，没必要每分钟写一次状态文件）。
+      if (rb.pluginLatest && typeof rb.pluginLatest === 'object') {
+        const next = JSON.stringify(rb.pluginLatest)
+        if (next !== lastRepoLatestJson) {
+          lastRepoLatestJson = next
+          try { saveState({ repoPluginLatest: rb.pluginLatest }) } catch { /* 落盘失败不影响心跳 */ }
+        }
+      }
       // 插件自动更新：网关插件仓库版本比本机新 → 后台静默安装（冷却/互斥在 self-update 内部），
       // 装完 UI 提示重启；绝不降级、绝不影响心跳本身（fire-and-forget）
+      // 只有本插件自己静默更新；仓库里其它插件走面板上的「更新」按钮（企业不允许终端自助安装）
       const repoLatest = rb.pluginLatest?.['dsh-enterprise']
       if (repoLatest && compareSemver(repoLatest, VERSION) > 0) {
         void maybeSelfUpdate(repoLatest, 'heartbeat').catch(() => { /* 更新失败不影响心跳 */ })
