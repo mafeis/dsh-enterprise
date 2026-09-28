@@ -20,6 +20,11 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org/
 
+      # 0.9.16 起 node 半区依赖 js-yaml（settings/yaml-edit.js），CI 必须先装依赖，
+      # 否则 node --test 会在 import 'js-yaml' 处 ERR_MODULE_NOT_FOUND
+      - name: Install dependencies
+        run: npm ci
+
       - name: Build
         run: node build.mjs
 

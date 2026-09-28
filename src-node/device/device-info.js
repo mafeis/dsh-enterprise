@@ -1,6 +1,8 @@
 /** 设备信息采集（心跳上报用）+ 本机已安装插件清单（插件管控比对用） */
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { VERSION } from '../shared/version.js'
+import { findProfileRoot } from '../shared/profile.js'
 
 /** 本机已安装的 DSH 插件清单：
  *  从插件自身位置（profiles/<name>/node_modules/<plugin>/lib/...）向上找
@@ -9,18 +11,11 @@ import { VERSION } from '../shared/version.js'
  */
 export function collectInstalledPlugins() {
   try {
-    let p = new URL('.', import.meta.url) // 本模块所在目录（lib/<sub>/）
-    for (let i = 0; i < 6; i++) {
-      p = new URL('../', p) // 逐级向上
-      const pkgPath = decodeURIComponent(p.pathname.replace(/^\/([A-Za-z]:)/, '$1')) + 'package.json'
-      if (!existsSync(pkgPath)) continue
-      try {
-        const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
-        const bundles = pkg?.dsh?.profile?.bundles
-        if (Array.isArray(bundles)) return bundles
-      } catch { /* 下一个目录 */ }
-    }
-    return null
+    const root = findProfileRoot()
+    if (!root) return null
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+    const bundles = pkg?.dsh?.profile?.bundles
+    return Array.isArray(bundles) ? bundles : null
   } catch { return null }
 }
 

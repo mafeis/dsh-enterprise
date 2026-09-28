@@ -4,34 +4,31 @@ import { writeTextAtomic, readJsonSafe } from '../shared/fs-utils.js'
 import { entSettingsFile, credentialsFile, dshSettingsFile } from '../shared/paths.js'
 import { pluginLog } from '../shared/log.js'
 import { syncMainSettingsProvider, profilePatchSettingsPaths } from './yaml-edit.js'
+import { apiKindForProtocol, DEFAULT_API_PROTOCOL, normalizeApiProtocol } from './api-protocol.js'
 import { ensureDefaultWorkspace } from './default-workspace.js'
 import { readToken } from '../state/state.js'
 
-/** 写 enterprise-settings.yaml（插件托管层）+ 同步主 settings.yaml（llm-pi-ai 运行时解析处） */
-export function writeProviderConfig(base, models) {
+/** 写 enterprise-settings.yaml（插件托管层）+ 同步主 settings.yaml（llm-pi-ai 运行时解析处）。
+ *  同一时间只保留 ent-gateway 一个 provider；protocol 决定它走 Completions 还是 Responses。 */
+export function writeProviderConfig(base, models, protocol = DEFAULT_API_PROTOCOL) {
+  const p = normalizeApiProtocol(protocol)
   const settingsPath = entSettingsFile()
   const settings = readJsonSafe(settingsPath) ?? {}
   settings['agent-default-model'] = { provider: 'ent-gateway', model: models[0].id, reasoningEffort: 'low' }
   settings.providers = settings.providers ?? {}
+  // 清理旧版双协议方案留下的第二个 provider，避免模型选择器出现两组相同网关。
+  delete settings.providers['ent-gateway-responses']
   settings.providers['ent-gateway'] = {
     displayName: '企业统一模型网关',
-    api: 'openai-completions',
+    api: apiKindForProtocol(p),
     apiKeyEnv: GATEWAY_KEY_REF,
     baseUrl: base,
-    compat: { thinkingFormat: 'openai' },
-    models,
-  }
-  // 双协议并存：Responses API 通道（/v1/responses），默认仍走 completions
-  settings.providers['ent-gateway-responses'] = {
-    displayName: '企业统一模型网关 Responses',
-    api: 'openai-responses',
-    apiKeyEnv: GATEWAY_KEY_REF,
-    baseUrl: base,
+    ...(p === 'completions' ? { compat: { thinkingFormat: 'openai' } } : {}),
     models,
   }
   writeTextAtomic(settingsPath, JSON.stringify(settings, null, 2))
   // 同步主 settings.yaml（llm-pi-ai 运行时从这里解析 provider）——与 logout 的清理对称
-  syncMainSettingsProvider(base, models)
+  syncMainSettingsProvider(base, models, p)
   // 新装机首次登录：自动注册默认工作目录（已有 workspace 则不动）
   ensureDefaultWorkspace()
 }

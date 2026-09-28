@@ -4,3 +4,10 @@
 - insert:
     - id: enterprise
       name: 'dsh-enterprise'
+
+# 企业版：禁用宿主的「更多」账号入口（DeepSeek 个人账号：登录 / 用量 / 充值 + 设置→账号 页）。
+# 侧栏脚的「设置」齿轮是 settings.launcher 的 fallback，只有 ui-settings-account 注册了
+# launcher 才会被顶替成「更多」；禁用该行后齿轮回来 → 侧栏只剩一个「设置」按钮。
+# 管理员如需恢复：设置 → 插件 → 重新启用「账号」即可（profile 层覆盖优先于本 bundle patch）。
+- id: ui-settings-account
+  disabled: true

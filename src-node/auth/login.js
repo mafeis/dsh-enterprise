@@ -8,6 +8,7 @@ import { writeTextAtomic, readJsonSafe } from '../shared/fs-utils.js'
 import { dshHome, entSettingsFile, credentialsFile } from '../shared/paths.js'
 import { writeCredential, writeProviderConfig, GATEWAY_KEY_REF } from '../settings/provider-config.js'
 import { syncMainSettingsProvider } from '../settings/yaml-edit.js'
+import { apiKindForProtocol, normalizeApiProtocol } from '../settings/api-protocol.js'
 // readState 必须导入：repairConfigure 首行就要用——漏导入会让"一键配置"和心跳指纹
 // 自动重配每次都抛 ReferenceError（被 catch 包装成"网关不可达"静默失败），模型永不跟随网关更新
 import { readState, saveState, readToken } from '../state/state.js'
@@ -68,6 +69,8 @@ export async function loginAndConfigure({ server, username, password }) {
   if (!models.length) return { ok: false, error: '网关无可用模型' }
 
   // 3. 写 enterprise-settings.yaml（JSON 宽容格式）
+  const existingState = readState()
+  const protocol = normalizeApiProtocol(existingState.apiProtocol)
   const settingsPath = entSettingsFile()
   const settings = readJsonSafe(settingsPath) ?? {}
   // 备份首次配置前的文件
@@ -76,17 +79,19 @@ export async function loginAndConfigure({ server, username, password }) {
   }
   settings['agent-default-model'] = { provider: 'ent-gateway', model: models[0].id, reasoningEffort: 'low' }
   settings.providers = settings.providers ?? {}
+  // 旧版双协议方案升级：只保留一个 provider，协议沿用上一次用户选择。
+  delete settings.providers['ent-gateway-responses']
   settings.providers['ent-gateway'] = {
     displayName: '企业统一模型网关',
-    api: 'openai-completions',
+    api: apiKindForProtocol(protocol),
     apiKeyEnv: GATEWAY_KEY_REF,
     baseUrl: base,
-    compat: { thinkingFormat: 'openai' },
+    ...(protocol === 'completions' ? { compat: { thinkingFormat: 'openai' } } : {}),
     models,
   }
   writeTextAtomic(settingsPath, JSON.stringify(settings, null, 2))
   // 同步主 settings.yaml（llm-pi-ai 运行时从这里解析 provider 定义）
-  syncMainSettingsProvider(base, models)
+  syncMainSettingsProvider(base, models, protocol)
 
   // 4. 写 .credentials.yaml（ENT_GATEWAY_TOKEN → JWT，插件内同步宿主 process.env）
   writeCredential(token)
@@ -104,14 +109,16 @@ export async function loginAndConfigure({ server, username, password }) {
   }
 
   // 6. 记录会话信息（供设置页显示 + 心跳用）
-  saveState({ user, gateway: base, tokenPreview: token.slice(0, 24) + '…', loginAt: new Date().toISOString(), models: models.map((m) => m.id) })
+  saveState({ user, gateway: base, tokenPreview: token.slice(0, 24) + '…', loginAt: new Date().toISOString(), models: models.map((m) => m.id), apiProtocol: protocol })
 
-  return { ok: true, user, models: models.map((m) => m.id), gateway: base }
+  return { ok: true, user, models: models.map((m) => m.id), gateway: base, apiProtocol: protocol }
 }
 
-/** 一键修复 provider 配置：用已存 token 重写 provider 定义（不要求重新输密码） */
-export async function repairConfigure() {
+/** 一键修复 provider 配置：用已存 token 重写 provider 定义（不要求重新输密码）。
+ *  options.protocol 用于设置页切换 API 协议；不传则沿用当前状态（默认 completions）。 */
+export async function repairConfigure(options = {}) {
   const state = readState()
+  const protocol = normalizeApiProtocol(options.protocol ?? state.apiProtocol)
   if (!state.gateway) return { ok: false, error: '从未登录过，请先登录' }
   const base = state.gateway
   const token = readToken()
@@ -126,10 +133,10 @@ export async function repairConfigure() {
     const models = mapGatewayModels(modelsBody.data)
     if (!models.length) return { ok: false, error: '网关无可用模型' }
     // 2. 重写配置（复用 login 的 3、4 步逻辑，但不重新认证）
-    writeProviderConfig(base, models)
+    writeProviderConfig(base, models, protocol)
     writeCredential(token)
-    saveState({ models: models.map((m) => m.id) })
-    return { ok: true, models: models.map((m) => m.id), gateway: base }
+    saveState({ models: models.map((m) => m.id), apiProtocol: protocol })
+    return { ok: true, models: models.map((m) => m.id), gateway: base, apiProtocol: protocol }
   } catch (e) {
     return { ok: false, error: '网关不可达：' + String(e?.message ?? e).slice(0, 120) }
   }

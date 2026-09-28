@@ -94,6 +94,14 @@
 				// 水印失败不影响其他功能
 			}
 
+			// 企业管控：屏蔽官方「插件」页右上角「添加插件」入口（终端不允许自助装插件；
+			// 策略 allowPluginInstall:true 才放开，实际兜底是白名单 + 清单外自动卸载）
+			try {
+				entPluginLockWatch(cleanups);
+			} catch (e) {
+				// 入口屏蔽失败不影响其他功能
+			}
+
 			// 企业管控：按网关策略隐藏设置页——模型页（lockModelConfig=true 固定藏）+ hiddenSettingsPages 清单（管理员按标签关键词配，双语关键词都写）。
 				// 策略随 /api/enterprise/policy 60s 轮询刷新，宿主改名后管理员在网关加关键词即可，无需发版。
 				// 插件安装 = 隐藏生效；插件卸载 = 本代码不再运行，隐藏页自动恢复显示。

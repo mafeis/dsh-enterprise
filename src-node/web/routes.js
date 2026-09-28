@@ -5,6 +5,7 @@
  *   POST /api/enterprise/logout            清场登出（吊销远端 + 清本地）
  *   GET  /api/enterprise/models            企业模型目录（网关实时，缓存兜底）
  *   POST /api/enterprise/repair            一键配置 Provider
+ *   POST /api/enterprise/api-protocol      切换企业网关 API 协议（completions/responses）
  *   POST /api/enterprise/heartbeat-config  心跳开关/间隔
  *   POST /api/enterprise/heartbeat-now     立即心跳
  *   GET  /api/enterprise/policy            网关下发的企业策略（只读透传）
@@ -34,6 +35,7 @@ import { VERSION } from '../shared/version.js'
 import { currentHeartbeatState, runHeartbeatOnce, syncHeartbeatTimer } from '../heartbeat/heartbeat.js'
 import { pendingUpdateRestart } from '../update/self-update.js'
 import { repairConfigure, loginAndConfigure } from '../auth/login.js'
+import { normalizeApiProtocol, protocolFromApiKind } from '../settings/api-protocol.js'
 import { logoutLocal } from '../auth/logout.js'
 import { LOGIN_PAGE_HTML } from './login-page.js'
 
@@ -296,6 +298,7 @@ export function createRoutes(ctx) {
         const s = readJsonSafe(entSettingsFile())
         const p = s?.providers?.['ent-gateway']
         const state = readState()
+        const apiProtocol = normalizeApiProtocol(state.apiProtocol ?? protocolFromApiKind(p?.api))
         const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)) }
         const installedPlugins = collectInstalledPlugins()
         const policySnap = await fetchPolicySnapshot()
@@ -308,6 +311,7 @@ export function createRoutes(ctx) {
         json(200, {
           pluginVersion: VERSION,
           configured: !!p,
+          apiProtocol,
           gateway: p?.baseUrl ?? state.gateway ?? '',
           lastGateway: state.gateway ?? '',
           factoryGateway: readFactoryGateway(),
@@ -469,6 +473,22 @@ export function createRoutes(ctx) {
       handler: async ({ res }) => {
         const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)) }
         json(200, await repairConfigure())
+      },
+    },
+    {
+      kind: 'exact',
+      path: '/api/enterprise/api-protocol',
+      methods: ['POST'],
+      jsonBody: true,
+      handler: async ({ res, body }) => {
+        const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)) }
+        const raw = String(body?.protocol ?? '')
+        if (raw !== 'completions' && raw !== 'responses') {
+          return json(400, { ok: false, error: 'protocol 必须是 completions 或 responses' })
+        }
+        // 不重新认证、不要求密码：沿用本机已存凭证重写唯一 provider。
+        const r = await repairConfigure({ protocol: raw })
+        json(200, r)
       },
     },
     {

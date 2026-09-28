@@ -8,6 +8,8 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { readState, readToken } from '../state/state.js'
 import { dshHome } from '../shared/paths.js'
+import { findProfileRoot } from '../shared/profile.js'
+export { findProfileRoot }
 import { pluginLog } from '../shared/log.js'
 
 /** 策略缓存：allowedPlugins / pluginRegistry / clientRules 从网关 /policy/current 拉取，60s 缓存 */
@@ -92,23 +94,7 @@ export async function resolvePluginInstallSpec(packageName) {
   }
 }
 
-/** 读取 profile 根目录（插件自身位置向上找含 dsh.profile.bundles 的 package.json） */
-export function findProfileRoot() {
-  try {
-    let p = new URL('.', import.meta.url)
-    for (let i = 0; i < 6; i++) {
-      p = new URL('../', p)
-      const dir = decodeURIComponent(p.pathname.replace(/^\/([A-Za-z]:)/, '$1'))
-      const pkgPath = join(dir, 'package.json')
-      if (!existsSync(pkgPath)) continue
-      try {
-        const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
-        if (Array.isArray(pkg?.dsh?.profile?.bundles)) return dir
-      } catch { /* 下一个目录 */ }
-    }
-  } catch { /* ignore */ }
-  return null
-}
+/** 读取 profile 根目录（共享定位器：兼容 link: 安装与多 profile）。 */
 
 /** 定位宿主 desktop-cli 入口 + 引导宿主 exe（返回 { exe, entry } 或 null）。
  *  宿主进程内 process.execPath = 宿主可执行文件，一级命中（entry 相对 exe 固定）；
