@@ -8,6 +8,8 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { findProfileRoots } from '../src-node/shared/profile.js'
 import { removeProviderFromSettingsYaml, syncOneMainSettingsProvider, syncMainSettingsProvider, profilePatchSettingsPaths, profilePatchFiles, syncEnterpriseProfilePatches, clearEnterpriseProfilePatches, migrateLegacyResponsesProvider } from '../src-node/settings/yaml-edit.js'
 
 // 隔离环境：插件所有落盘都走 DSH_HOME / LOCALAPPDATA / ENT_SETTINGS_PATH，全部指向临时目录
@@ -366,6 +368,89 @@ test('profile 定位：无 DSH_PROFILE 时能从官方 CLI argv 的 web/tui 推�
     else process.env.DSH_HOME = prevHome
     if (prevProfile === undefined) delete process.env.DSH_PROFILE
     else process.env.DSH_PROFILE = prevProfile
+  }
+})
+
+test('profile 定位：装了企业包的多个 profile 全部进入同步范围（回归：命中即返回导致漏同步）', () => {
+  // 现场事故复刻：同机 desktop/ent/web 三个 profile 都装了 dsh-enterprise，
+  // 但插件从 desktop/node_modules 加载时 profileRootFromModule 命中 desktop 就 return，
+  // 于是 web 的 cordis.patch.yml 停在旧协议值近 20 小时没人对账。
+  const home = join(sandbox, 'multi-profile-home')
+  const mk = (name, bundles) => {
+    const dir = join(home, 'profiles', name)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({
+      name: `dsh-profile-${name}`,
+      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', ...bundles] } },
+    }), 'utf8')
+    const patch = join(dir, 'cordis.patch.yml')
+    writeFileSync(patch, '[]\n', 'utf8')
+    return { dir, patch }
+  }
+  const desktop = mk('desktop', ['dsh-enterprise'])
+  const ent = mk('ent', ['dsh-enterprise'])
+  const web = mk('web', ['dsh-enterprise'])
+  mk('headless', ['@deepseek-ai/dsh-headless'])   // 无企业包：必须排除
+
+  const prevHome = process.env.DSH_HOME
+  const prevProfile = process.env.DSH_PROFILE
+  const prevProfilesDir = process.env.ENT_PROFILES_DIR
+  process.env.DSH_HOME = home
+  process.env.DSH_PROFILE = 'desktop'
+  delete process.env.ENT_PROFILES_DIR
+  try {
+    const files = profilePatchFiles()
+    // 三个装了企业包的 profile 一个都不能少
+    assert.ok(files.includes(desktop.patch), 'desktop 在同步范围')
+    assert.ok(files.includes(ent.patch), 'ent 在同步范围（旧实现会漏）')
+    assert.ok(files.includes(web.patch), 'web 在同步范围（旧实现会漏）')
+    // 没装企业包的 profile 不该被写
+    assert.ok(!files.some((f) => f.includes(`${'headless'}`)), 'headless 不在同步范围')
+    // 插件所在 profile 排最前：老调用方依赖 roots[0]
+    assert.equal(files[0], desktop.patch, '插件所在 profile 排在最前')
+    // 去重：同一 profile 不能因「模块路径 + 扫描」两条来源各出现一次
+    assert.equal(new Set(files).size, files.length, '无重复项')
+  } finally {
+    if (prevHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = prevHome
+    if (prevProfile === undefined) delete process.env.DSH_PROFILE
+    else process.env.DSH_PROFILE = prevProfile
+    if (prevProfilesDir === undefined) delete process.env.ENT_PROFILES_DIR
+    else process.env.ENT_PROFILES_DIR = prevProfilesDir
+  }
+})
+
+test('profile 定位：模块来源命中同一 profile 时，roots 里不会出现「/dup」与「/dup/」两条', () => {
+  // profileRootFromModule 返回的路径带尾斜杠，扫描结果不带。并集逻辑下同一 profile 会被
+  // 两条来源各命中一次，若不做归一化，roots 就会出现两个「只差一个斜杠」的重复项。
+  // 注意：必须直接断言 findProfileRoots()——走 profilePatchFiles() 会被 existsSync 过滤掩盖。
+  const home = join(sandbox, 'slash-profile-home')
+  const profileDir = join(home, 'profiles', 'dup')
+  mkdirSync(profileDir, { recursive: true })
+  writeFileSync(join(profileDir, 'package.json'), JSON.stringify({
+    name: 'dsh-profile-dup',
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-enterprise'] } },
+  }), 'utf8')
+  writeFileSync(join(profileDir, 'cordis.patch.yml'), '[]\n', 'utf8')
+  const prevHome = process.env.DSH_HOME
+  const prevProfile = process.env.DSH_PROFILE
+  const prevProfilesDir = process.env.ENT_PROFILES_DIR
+  process.env.DSH_HOME = home
+  process.env.DSH_PROFILE = 'dup'
+  delete process.env.ENT_PROFILES_DIR
+  try {
+    // 同时给出「模块来源」（带尾斜杠的目录 URL）与「扫描来源」，两者指向同一 profile
+    const moduleUrl = pathToFileURL(join(profileDir, 'node_modules', 'dsh-enterprise', 'lib', 'index.js')).href
+    const roots = findProfileRoots(moduleUrl)
+    assert.equal(roots.length, 1, `同一 profile 只应出现一次，实际：${JSON.stringify(roots)}`)
+    assert.equal(roots[0], profileDir, '路径已归一化（无尾斜杠）')
+  } finally {
+    if (prevHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = prevHome
+    if (prevProfile === undefined) delete process.env.DSH_PROFILE
+    else process.env.DSH_PROFILE = prevProfile
+    if (prevProfilesDir === undefined) delete process.env.ENT_PROFILES_DIR
+    else process.env.ENT_PROFILES_DIR = prevProfilesDir
   }
 })
 

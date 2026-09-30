@@ -75,13 +75,29 @@ function enterpriseProfileDirs() {
   return out
 }
 
-/** 返回当前可能的 profile 根目录；link 安装时依赖 DSH_PROFILE 或 DSH_HOME 扫描兜底。 */
+/** 返回当前**全部**可能的 profile 根目录（去重，插件所在 profile 排最前）。
+ *
+ *  这里以前是「命中即返回」：`moduleRoot` 一旦解析成功就只返回它，于是从已安装包
+ *  （…/profiles/desktop/node_modules/dsh-enterprise/lib/…）导入时，枚举永远只剩 desktop
+ *  一个 profile —— 同机其它装着本插件的 profile（web / ent / headless…）不会被同步。
+ *  实测代价：web profile 的 cordis.patch.yml 停在 `openai-responses` 近 20 小时，
+ *  用户在别的 profile 里「切了协议没生效」就是这么来的。
+ *
+ *  四路全部并入并去重：插件所在 profile → 当前激活 profile → 所有声明企业包的 profile。
+ *  顺序有意义：老调用方的 `roots[0]` 仍是插件所在/激活 profile，行为只增不减。 */
 export function findProfileRoots(moduleUrl = import.meta.url) {
-  const moduleRoot = profileRootFromModule(moduleUrl)
-  if (moduleRoot) return [moduleRoot]
+  const out = []
+  const push = (dir) => {
+    if (!dir) return
+    const normalized = String(dir).replace(/[\\/]+$/, '')
+    if (!normalized || out.includes(normalized)) return
+    out.push(normalized)
+  }
+  push(profileRootFromModule(moduleUrl))
   const active = activeProfileDir()
-  if (active && readProfilePackage(active)) return [active]
-  return enterpriseProfileDirs()
+  if (active && readProfilePackage(active)) push(active)
+  for (const dir of enterpriseProfileDirs()) push(dir)
+  return out
 }
 
 /** 返回最适合执行 profile 级操作的根目录；找不到返回 null。 */
